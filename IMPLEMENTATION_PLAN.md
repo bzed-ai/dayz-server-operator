@@ -48,7 +48,7 @@ Legacy source analysed: `../dayzdockerserver` (branches `main`, `chernarus`, `li
 | D28 | Analytics | **Optional ClickHouse** for high-volume append-only history (positions, sessions, chat, population, admin events) using MergeTree/TTL/ReplacingMergeTree/AggregatingMergeTree + materialized views. SQLite/PostgreSQL remain the source of truth for mutable state (§C19). |
 | D29 | Platform | **Debian trixie** everywhere (host, images, `.deb`); plan for **podman 5.4.2** / systemd 257; runtime tools **only from Debian packages** (Python only with packaged modules); **Go built with the latest upstream toolchain** (go1.27.x), not trixie's golang-go (§C0). |
 | D30 | RCon | **Built-in BattlEye RCon implementation in dzo**, with no external tools (`bercon-cli`, `dayz_restart`) and no external RCon library (§C8). |
-| D31 | Pre-change backups | Optional **backup/snapshot hook before every change**, including automatic mod updates. The server is stopped for consistency, with built-in backends + custom hooks and an abort/warn policy (§C20). |
+| D31 | Backups | **Built into dzo via btrfs snapshots**: instances must live on btrfs subvolumes (created unprivileged), read-only snapshots before changes (incl. automatic mod updates, with the server stopped), configurable retention with safe cleanup, full/partial restore, and an optional `post_backup` hook for offsite copies (§C20). |
 
 ---
 
@@ -288,8 +288,8 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 | FR-18b | **Discord** notifications (webhook) for updates, restarts, crashes, health changes, failed renders/jobs | – |
 | FR-19 | Status: installed build/version, running, uptime, effective command line, active mods, players | status |
 | FR-20 | Logs: journald for console; rotation of profile logs (`*.log *.RPT *.mdmp *.ADM`) into timestamped dirs; crash summary (tail of error/script/RPT); LogZ output dir per instance | report/rotate |
-| FR-21a | Configurable **backup/snapshot before any change** (server update, mod updates incl. automatic ones, mission/config changes, renders), with built-in btrfs/reflink/archive backends and custom hooks, a failure policy, and **configurable retention (keep N, per trigger, max age, space limits) with guaranteed cleanup** | D31 |
-| FR-21 | Backup (missions storage + profiles), restore, wipe storage with confirmation | backup/wipe |
+| FR-21a | **Backups before changes** (server update, mod updates incl. automatic ones, mission/config changes, destructive operations, optionally every start or on a schedule) as btrfs snapshots; configurable retention (keep N, per trigger, max age, free space, pinning) with guaranteed cleanup; full and partial restore | D31 |
+| FR-21 | Backup, restore, wipe storage with confirmation (backups via FR-21a) | backup/wipe |
 | FR-22 | **Built-in** BattlEye RCon client (no external tools): console/commands (players, say, kick, lock/unlock, bans), event stream (connect/GUID/chat), GeoIP enrichment | bercon |
 | FR-23 | Pre-start / post-render **hooks** per instance (traderstocks, live weather, …) | pre_start.sh |
 | FR-24 | Extra per-instance container options: env (e.g. LD_PRELOAD), extra ro mounts (GeoIP, fix libs), CPU pinning/limits, params | D9 |
@@ -341,6 +341,7 @@ Everything targets **Debian 13 "trixie"** (stable): host, container base images,
 | libjs-htmx / libjs-leaflet | 2.0.4 / 1.7.1 | web UI assets are taken **from the Debian packages** (§C12) |
 | postgresql | 17 | optional DB backend (§C18) |
 | monitoring-plugins-basic, btrfs-progs, git, uidmap | packaged | Recommends/Depends of the `.deb` |
+| btrfs (kernel 6.12) | – | **required** filesystem for the configured `paths.instances` + `paths.snapshots` (same filesystem; any location, e.g. `/srv/dayz`; §C2, §C20). Recommended mount option `user_subvol_rm_allowed` |
 | golang-go | 1.24 (1.26 in backports) | **not used for building** (see below) |
 
 **Rules:**
@@ -382,7 +383,29 @@ Working name for the binary: **`dzo`** (dayz-server-operator). Cheap to rename.
 ## C2. Host layout
 
 Service user **`dayz`** (created by the Debian package, see §C14), lingering enabled, subuid/subgid ranges
-assigned. Home = `/var/lib/dzo`. All paths are configurable:
+assigned. Home = `/var/lib/dzo` (package default).
+
+**All data locations are configurable** in `/etc/dzo/config.yaml`. Nothing in dzo hard-codes `/var/lib/dzo`, and the defaults are only defaults:
+
+```yaml
+paths:
+  data: /var/lib/dzo              # e.g. /srv/dayz
+  instances: ${data}/instances    # btrfs required (§C20), may be a different mount than data
+  snapshots: ${data}/snapshots    # must be on the SAME btrfs filesystem as `instances` (snapshots cannot cross filesystems)
+  cache: ${data}/cache            # download generations (reflink-friendly if on btrfs)
+  secrets: ${data}/secrets
+  db: ${data}/db                  # SQLite file(s)
+```
+
+* `dzo setup` creates the directories with the right ownership (`dayz`, 0750/0700) and validates the constraints (btrfs for `instances`,
+  same filesystem for `snapshots`, and enough free space). The same validation runs at every daemon/CLI start.
+* The service user's home (quadlets in `~/.config/containers/systemd/`, the rootless podman storage in `~/.local/share/containers/`) stays
+  at the package default. Rootless podman's image storage can be moved via the user's `storage.conf` if wanted (`dzo setup --podman-storage <dir>`).
+  Generated quadlets always reference the configured absolute paths.
+* Relocating an existing installation: `dzo setup relocate --to <dir>` (stop instances → move data → create new subvolumes on the target and
+  copy into them (`cp -a --reflink=auto`, instant within the same btrfs filesystem) → update config → regenerate quadlets → start).
+
+Default layout (with `paths.data = /var/lib/dzo`):
 
 ```
 /etc/dzo/config.yaml                      operator config: paths, site repo URL/branch, products, notification targets
@@ -396,15 +419,16 @@ assigned. Home = `/var/lib/dzo`. All paths are configurable:
     workshop/<appid>/<modid>/<time_updated>/  immutable mod generations
     steamcmd/<product>/                   steamcmd working install dirs (mutable, never mounted into servers)
     git/<repo-hash>/                      bare mirrors of mission repos (shared fetch cache)
-  instances/<name>/
+  instances/<name>/                       btrfs SUBVOLUME per instance (required, §C20)
     servermpmissions/                     PRISTINE mission(s) for this instance (git worktree of its mission repo @ ref)
     mpmissions/                           LIVE missions, persistent, never wiped (D13), mounted rw
       <map>/                              incl. storage_1/, mod data, operator-managed files
       .dzo-manifest.json                  files the operator owns + their last written hashes (lives outside <map>)
     profiles/                             DayZ -profiles dir (logs, BattlEye, mod configs e.g. VPPAdminTools)
     runtime/                              generated per start: keys/, serverDZ.cfg, beserver cfg, args (mounted ro)
-    snapshots/                            pre-render snapshots of the managed files (+ optional btrfs snapshots)
-    backups/
+    snapshots/                            copies of changed/drifted managed mission files (last N, §C6)
+  snapshots/<name>/<ts>-<reason>/         read-only btrfs snapshots of the instance subvolume (§C20)
+  snapshots/_db/                          database backups
   jobs/                                   job logs + state (update runs, restarts)
 /run/dzo/status/<name>.json               local status snapshot (fallback/debug; remote monitoring uses dzo-exporter, §C9)
 /var/log/dayz/<name>/                     optional LogZ bind (as today)
@@ -563,7 +587,8 @@ or, once it exists, scheduled inside the `dzo serve` daemon.
 | `dzo-exporter.service` | long-running: `/metrics` (Prometheus) + `/status` (JSON for remote Icinga), §C9 |
 | `dzo-status.timer/.service` | every minute: `dzo status --write /run/dzo/status/` (local snapshot + watchdog) |
 | `dzo-site-pull.timer/.service` | optional periodic `dzo site pull` |
-| `dzo-backup-prune.timer/.service` | daily: enforce backup retention, clean up interrupted backups, orphan scan (§C20) |
+| `dzo-backup-prune.timer/.service` | daily: backup retention/cleanup, interrupted snapshots, orphan report, DB backup (§C20) |
+| `dzo-backup-<name>.timer/.service` | optional periodic snapshots per instance (`backup.schedule`) |
 | `dzo-web.service` (phase 3) | `dzo serve` (web UI + API + scheduler), bound to localhost, behind a reverse proxy. Once it runs, it may take over the timer schedules, or keep driving the same timers. |
 
 Design notes:
@@ -634,15 +659,15 @@ Rules:
   stay foreign instead (e.g. a mod that ships its config in the mission repo but rewrites it at runtime).
 * **New integration/overlay files** in the site repo simply become new generated files on the next render.
 * **Files removed from pristine** are *not* deleted from live. They are dropped from the manifest (become foreign) and reported.
-  Deleting them is an explicit `dzo mission prune <name>` with backup.
+  Deleting them is an explicit `dzo mission prune <name>` (after a `destructive` snapshot).
 * **Never delete anything that is not in the manifest.** Generated dirs are not `rm -rf`ed (unlike legacy). Only
   manifest-listed files inside them are removed; unknown files found there are reported and left alone.
 * `storage_*` and the per-instance `mission.unmanaged` globs are hard-excluded from every write, even when pristine contains matching paths.
 * **Drift handling (Q11):** before overwriting a managed file whose live hash differs from the last written hash, copy it to
   `snapshots/<ts>/drift/<path>`, log a warning with a diff summary, and notify (Discord) once per file and change.
-* **Safety net:** before every apply, all managed files that will change are copied to `snapshots/<ts>/` (plus a btrfs
-  snapshot of the whole mission if available, spike S7). `dzo mission rollback <name> [<ts>]` restores them.
-* **Re-initialise** (`dzo mission reinit <name>`) is the only destructive operation: explicit confirmation, full backup first.
+* **Safety net:** before every apply, all managed files that will change are copied to `snapshots/<ts>/` (only these files; the last
+  `mission.keep_file_snapshots` sets are kept, older ones are deleted). `dzo mission rollback <name> [<ts>]` restores them. Full backups are btrfs snapshots (§C20).
+* **Re-initialise** (`dzo mission reinit <name>`) is the only destructive operation: explicit confirmation, and a `destructive` snapshot is taken first.
 * **Updating pristine** (`dzo mission update <name>` = git fetch + checkout of `ref`) only changes `servermpmissions/`.
   The live mission follows on the next render. `--dry-run` shows the resulting apply plan.
 * Consequence: customisations never go into the live `db/*.xml`. They go into overlays (CE folder or merge fragments).
@@ -714,8 +739,8 @@ if its launch or config model differs, a new **product driver** in code (an inte
   1. Determine new server builds (per product in use) and mod generations.
   2. Download + snapshot (servers keep running; nothing mounted changes).
   3. Map affected instances (a product build affects all instances of that product; mod X affects instances using X).
-  4. Per affected instance and policy: `auto` → graceful restart with the update announcement, running **stop → pre-change backup/snapshot hook (§C20)
-     → switch generation (re-render + regenerated quadlet) → start**; if the backup fails with policy `abort`, the instance restarts on the old generation and an alert is sent; `notify` → record + notify; `manual` → record.
+  4. Per affected instance and policy: `auto` → graceful restart with the update announcement, running **stop → btrfs snapshot (§C20)
+     → switch generation (re-render + regenerated quadlet) → start**; if the snapshot fails with policy `abort`, the instance restarts on the old generation and an alert is sent; `notify` → record + notify; `manual` → record.
   5. Garbage-collect generations not referenced by any instance and older than N days.
 * Rollback: `dzo instance pin <name> --mod <id>@<gen>` / `--build <buildid>`.
 * A global lock (flock) ensures a single steamcmd job at a time.
@@ -779,8 +804,8 @@ dzo must therefore treat Steam auth as an **interactive, recurring operator task
   * The RCon endpoint is reached from the host (`127.0.0.1:<rcon>` with host networking, or the published port). `RConIP` is set to `127.0.0.1` where possible (S5).
 * `dzo restart <name> [--minutes 30 --lock 3 --delay 3 --text "…"] [--now]`:
   announcement schedule as in A4 → `#lock` at the offset (retry) → up to 3 passes of `players` + `kick <id> <reason>`,
-  then `#kick -1` → wait the delay → restart. A plain restart is `systemctl --user restart dzo-<name>.service`. If a pre-change backup is due
-  (§C20), the job runs `stop` → backup → `start`, and the start renders/applies (`ExecStartPre`).
+  then `#kick -1` → wait the delay → restart. A plain restart is `systemctl --user restart dzo-<name>.service`. If a pre-change snapshot is due
+  (§C20), the job runs `stop` → snapshot → `start`, and the start renders/applies (`ExecStartPre`).
   **No `#shutdown`.** If RCon is unreachable: log it and restart via systemd immediately (configurable).
 * It runs as a transient systemd unit (`systemd-run --user --unit dzo-restart-<name>`), or as the service of the
   restart timer, so it survives CLI disconnects, is visible, and is cancellable (`dzo restart <name> --cancel` sends `#unlock` + an announcement).
@@ -889,7 +914,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 | `dz a / d / l` | `dzo instance mods <name> add/remove/move/list` |
 | `dz c` | `dzo config diff/apply <name>` (serverDZ.cfg) |
 | `dz s` | `dzo status [<name>]` (build, generations, running, uptime, players via A2S, args, pending updates) |
-| `dz b / w` | `dzo backup <name>`, `dzo restore <name> <backup>`, `dzo wipe <name>` |
+| `dz b / w` | `dzo backup create/list/diff/pin/unpin/prune <name>`, `dzo restore <name> <id> [--path …]`, `dzo wipe <name>` |
 | `restart`, `restart_extern`, `dayz_restart`, `mod_update_*`, cron | `dzo restart <name>`, `dzo-update-check.timer`, `dzo-restart-<name>.timer` |
 | `healthcheck` | `dzo health startup/live` (inside the container), `dzo check …` (Icinga) |
 | `DEVELOPMENT` / `DONT_START` | `dzo render <name> --dry-run --diff`, `dzo shell <name>` |
@@ -897,7 +922,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 
 ## C11. Hooks and extensibility
 
-* Hook points: `pre_change_backup` (§C20), `post_download(mod)`, `post_merge(mod)`, `post_render`, `pre_start`, `post_stop`, `pre_update`, `post_update`.
+* Hook points: `post_backup` (§C20, offsite copies), `post_download(mod)`, `post_merge(mod)`, `post_render`, `pre_start`, `post_stop`, `pre_update`, `post_update`.
 * A hook is an executable with the env contract `DZO_*` and a JSON context on stdin. Non-zero exit aborts (configurable).
 * Built-in Go plugins over time: `traderstocks`, `weather` (Open-Meteo), `nominal-scale` (authoring helper).
 * Core as a Go library (`internal/…` → a `pkg/…` API later); CLI and web are thin adapters over one service layer with
@@ -908,7 +933,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 * `dzo serve`: `net/http` + `html/template` + htmx (served from Debian's `libjs-htmx`, `/usr/share/javascript/htmx/`; an embedded copy only for non-deb dev builds and tests), SSE for live logs, job progress, player lists and the map.
 * Pages: dashboard (instances, players online, build, pending updates), instance detail (mods with drag-order,
   overlays, serverDZ.cfg editor with diff, render diff, RCon console), **players and moderation (§C18)**, **admin map (§C16/§C17)**,
-  **schedules (restarts, broadcasts)**, mod search (Steam Web API), jobs, backups, audit log, and later an XML/JSON editor with `dzce`
+  **schedules (restarts, broadcasts)**, mod search (Steam Web API), jobs, **backups (list, diff, browse, pin, restore)**, audit log, and later an XML/JSON editor with `dzce`
   validation (the legacy XmlTree idea).
 * JSON API `/api/v1/…` over the same service layer (Discord bots, scripts). Every UI action is an API call.
 * Auth: local users (argon2id, optional TOTP 2FA) or OIDC / trusted reverse-proxy header. **RBAC scoped per server**: roles
@@ -937,12 +962,13 @@ Icinga runs on another host, so everything is reachable over the network. No loc
   * `/usr/bin/dzo` (static; also bind-mounted into containers for health checks)
   * `/usr/share/dzo/images/{runtime,steamcmd}/Containerfile`, quadlet templates, default presets
   * `/etc/dzo/config.yaml` (conffile, commented defaults)
-  * `sysusers.d/dzo.conf` → system user `dayz` with home `/var/lib/dzo`; `tmpfiles.d/dzo.conf` → `/var/lib/dzo`, `/run/dzo/status`
+  * `sysusers.d/dzo.conf` → system user `dayz` with home `/var/lib/dzo`; `tmpfiles.d/dzo.conf` → `/var/lib/dzo` (home + default data dir), `/run/dzo/status`.
+    Custom data paths (e.g. `/srv/dayz`) are created and validated by `dzo setup`, not by the package.
   * Icinga 2 CheckCommand definitions + example services, bash/zsh completion, man pages (generated from the CLI)
 * `postinst`: allocate **subuid/subgid** ranges for `dayz` (sysusers does not do this; needed for rootless podman),
   `loginctl enable-linger dayz`, and **no** automatic start of game servers. `dzo setup` (run as `dayz`) does the
   first-time steps: image builds, steam login, site repo clone.
-* Depends: `podman (>= 5.4)`, `systemd (>= 257)`, `git`, `uidmap`, `passt`, `libjs-htmx`, `libjs-leaflet`. Recommends: `btrfs-progs`, `geoipupdate`,
+* Depends: `podman (>= 5.4)`, `systemd (>= 257)`, `git`, `uidmap`, `passt`, `libjs-htmx`, `libjs-leaflet`. Recommends: `geoipupdate`, `btrfs-progs` (admin tooling; dzo uses the ioctls directly),
   `python3`, `python3-requests` (for hooks). Suggests: `postgresql`, `monitoring-plugins-basic`. All are available in trixie.
 * Upgrades: `postinst` triggers `dzo quadlet regenerate` for the `dayz` user (via `systemctl --user -M dayz@`) so
   generated units follow template changes. Running servers are not restarted automatically.
@@ -1181,7 +1207,7 @@ map linearly to pixels, and clicking the map returns world coordinates for telep
   SQLite and PostgreSQL (a service container in GitHub Actions and GitLab), and this counts toward the 85 % coverage.
 * High-volume history (positions, full session log, chat, population) goes to **ClickHouse if configured (§C19)**. Otherwise the relational DB keeps only a short retention of it.
 * SQLite runs in WAL mode with a single writer goroutine. `dzo db migrate-to-postgres` copies everything for a later switch.
-* Backups: `dzo db backup` (SQLite online backup / `pg_dump` hook), included in `dzo backup`.
+* DB backups: `VACUUM INTO` (SQLite) / `pg_dump` into `${paths.snapshots}/_db/`, before migrations and daily, with retention (§C20).
 
 ### Player list and player page
 
@@ -1307,102 +1333,101 @@ map linearly to pixels, and clicking the map returns world coordinates for telep
 * Tests: the ClickHouse integration test job uses the official ClickHouse service container in both CIs. The analytics writer and query code count toward
   the 85 % coverage (unit tests use an interface fake, and integration tests cover the SQL).
 
-## C20. Pre-change backups and snapshots (D31)
+## C20. Backups: btrfs snapshots (D31)
 
-Any operation that changes an instance can first create a **backup or snapshot through a configurable hook**. This includes automatic mod
-updates run unattended at night.
+Backups are part of dzo and are built on **one mechanism: btrfs snapshots of per-instance subvolumes**. There are no alternative backends, and
+that is what keeps it simple.
 
-**Trigger points** (each individually enabled per instance, defaults in `site.yaml`):
+### Requirement: instances on btrfs subvolumes
 
-| Trigger | When |
-|---|---|
-| `update` | before an instance switches to a new product build (server update) |
-| `mod_update` | before an instance switches to new mod generations (**incl. the automatic hourly update pipeline**) |
-| `mission_update` | before `dzo mission update` / pristine changes are applied |
-| `render` | before every render/apply (every start; cheap with btrfs snapshots, off by default) |
-| `config_change` | before applying site repo changes (instance.yaml, overlays, serverDZ.cfg) |
-| `import`, `reinit`, `restore`, `wipe`, `db_migrate` | before destructive or large operations (**always on**, cannot be disabled) |
+* The configured `paths.instances` and `paths.snapshots` (§C2; any location, e.g. `/srv/dayz/instances`) **must be on the same btrfs filesystem**. `dzo setup` and every daemon/CLI start check it
+  (`statfs` → `BTRFS_SUPER_MAGIC`) and refuse to manage instances otherwise, with a clear message. For hosts without a btrfs data volume,
+  the docs describe adding one (a dedicated partition/LV, or a loopback image file as a stop-gap).
+* **Every instance directory is a subvolume**, created by dzo as the unprivileged `dayz` user via the `BTRFS_IOC_SUBVOL_CREATE` ioctl (no root, no
+  helper; verified on kernel 7.1, re-checked on trixie's 6.12 in S7). The importer creates the subvolume first and copies legacy data into it.
+* Files written by the game container are owned by `dayz` (the rootless container runs as root in the user namespace = the `dayz` uid on the host), so
+  snapshotting, restoring and deleting never need `podman unshare` or root.
+* Recommended mount option: **`user_subvol_rm_allowed`** (instant snapshot deletion by the owner). It is not required, see "Deletion" below. `dzo setup`
+  reports whether it is set.
 
-**Consistency: snapshot while the server is stopped.** For triggers that come with a restart (updates, mod updates, config changes), the
-restart job runs **stop → pre-change backup → render/apply → start** instead of a plain `systemctl restart`. The backup therefore sees a
-quiescent mission/storage, with no half-written `storage_1`. Triggers without a restart (e.g. a mission update prepared in advance) back up at
-the next stop. `--now` is available for an explicit online backup.
+### What gets snapshotted
 
-**What gets backed up** (per instance): `mpmissions/` (live mission incl. storage), `profiles/`, `runtime/`, the manifest, and the relevant
-DB rows (a database dump when the whole DB is included). Cache generations are immutable and not included, since a rollback just pins the old generation (§C7).
+* A snapshot is a **read-only snapshot of the whole instance subvolume** (`servermpmissions/`, live `mpmissions/` incl. `storage_*` and mod data,
+  `profiles/`, `runtime/`, manifest, mission file copies), stored at `${paths.snapshots}/<instance>/<timestamp>-<reason>`.
+  It is instant and space-efficient (copy-on-write).
+* The **database** is backed up separately: SQLite via `VACUUM INTO` (consistent online copy) into `${paths.snapshots}/_db/<timestamp>.sqlite`,
+  PostgreSQL via `pg_dump` (if the local server is used). This runs before DB migrations and daily, with the same retention mechanism.
+  ClickHouse is not backed up by dzo (it is analytics data, and the stack owner handles it).
+* Download cache generations are immutable and not snapshotted. A rollback pins the old generation (§C7).
 
-**Backends:**
-* Built-in:
-  * `btrfs-snapshot`: read-only subvolume snapshot of the instance directory (instant). This requires the instance dir to be a subvolume, and `dzo setup` creates it that way on btrfs.
-  * `reflink-copy`: `cp --reflink=auto` tree copy (instant on btrfs/XFS, a full copy elsewhere).
-  * `archive`: `tar` + `zstd` archive (Debian packages) into `backups/`.
-* `hook`: **any executable** (e.g. a script calling `restic`, `borgbackup`, `zfs snapshot`, LVM, or a remote backup system; use the Debian-packaged tools).
-  Contract: env `DZO_INSTANCE`, `DZO_REASON` (trigger), `DZO_JOB_ID`, `DZO_PATHS` (colon-separated), `DZO_SERVER_STOPPED=1|0`,
-  `DZO_FROM` / `DZO_TO` (e.g. old/new build or mod generations), and a JSON context on stdin. The hook prints an optional backup id on stdout,
-  which is stored in the job record and shown in `dzo backup list` / the web UI.
-* Several backends can be chained (e.g. a fast local btrfs snapshot + a restic hook to offsite).
+### When snapshots are taken
 
-**Failure policy** (per trigger): `abort` (default for updates: the update is not applied, the server is started again on the old
-generation, and an alert is raised), `warn` (continue + alert), or `skip`. Timeouts per hook. Results are notified via Discord and shown in metrics
-(`dzo_backup_last_success_timestamp{instance,reason}`, `dzo_backup_failures_total`).
+| Trigger | When | Default |
+|---|---|---|
+| `update` | before an instance switches to a new product build | on |
+| `mod_update` | before new mod generations are applied, **incl. the automatic hourly update pipeline** | on |
+| `mission_update` | before pristine mission changes are applied | on |
+| `config_change` | before site repo changes (instance.yaml, overlays, serverDZ.cfg) are applied | on |
+| `render` | before every render/apply, i.e. every start incl. crash restarts | off |
+| `scheduled` | periodic snapshots of a running server (`dzo-backup-<name>.timer`, e.g. every 6 h; crash-consistent, like a power cut) | off |
+| `manual` | `dzo backup create <name>` / web UI | – |
+| `destructive` | before import, `mission reinit`, `mission prune`, `wipe`, restore | **always, cannot be disabled** |
 
-**Retention (built-in backends): configurable and enforced.**
+For triggers that come with a restart, the restart job runs **stop → snapshot → apply → start**. The snapshot sees a stopped server and takes
+milliseconds, so it adds no noticeable downtime. If a snapshot fails, the policy is `abort` by default: nothing is applied, the server starts on the old generation,
+and an alert is sent. `warn` is available per trigger. The update pipeline continues with other instances.
 
-* **Settings** per backend (defaults in `site.yaml`, override per instance):
-  * `keep` (number of backups to keep, default e.g. 10), optionally **per trigger** (`keep_by_reason: {mod_update: 5, update: 10, render: 3}`),
-    since frequent automatic mod updates must not push out the rarer server-update backups;
-  * optional `max_age` (e.g. `30d`) and `min_keep` (never go below N, even if they are older than `max_age`);
-  * optional `max_bytes` / `min_free_bytes` for the backup location (archives, reflink copies): the oldest backups are pruned first,
-    but never below `min_keep`. If space still does not suffice, **the new backup fails with the configured policy instead of deleting protected ones**.
-  * `pinned` backups (`dzo backup pin <id>`, e.g. "before migration") are never pruned automatically.
-* **Index as the single source of truth:** every built-in backup is recorded in the DB (id, instance, backend, reason, created_at, path/subvolume,
-  size, state `creating` → `complete` | `failed` → `deleting` → `deleted`, pinned). Pruning only ever acts on entries of this index. It **never
-  deletes by globbing directories**, and it verifies that a path to delete lies inside the configured backup root of that instance
-  (defence against misconfiguration).
-* **When cleanup runs:**
-  1. right after each successful backup (for the same instance/backend/trigger);
-  2. via the `dzo-backup-prune.timer` (daily) for all instances, which catches age-based expiry and anything missed;
-  3. manually with `dzo backup prune [<name>] [--dry-run]`.
-  Pruning only happens **after the new backup completed successfully**, so a failing backup never leaves you with fewer good backups.
-* **Proper deletion per backend:**
-  * `btrfs-snapshot`: `btrfs subvolume delete` (read-only snapshots are made writable first if needed). A snapshot is only removed from the index after the command succeeded.
-    Optional `btrfs subvolume sync` to reclaim space before reporting sizes.
-  * `reflink-copy`: remove the tree (with a path check against the backup root). Partially deleted trees stay `deleting` and are retried.
-  * `archive`: remove the archive + its checksum/metadata file.
-  * Deletions are idempotent and retried on the next run. Failures are reported (`dzo_backup_prune_failures_total`, Discord, `dzo check remote --backups`).
-* **Orphan and leftover handling:**
-  * Crashed/interrupted backups (`creating` older than the timeout) are cleaned up and marked `failed`.
-  * An **orphan scan** (daily, and part of `dzo backup prune`) reports snapshots/dirs/archives inside the backup root that are **not** in the index
-    (e.g. manual copies or a restored DB). They are **reported, not deleted**, unless `dzo backup prune --adopt-orphans` / `--delete-orphans` is run explicitly.
-  * Index entries whose files no longer exist are marked `missing` and reported.
-* **Removing an instance** (`dzo instance remove`) asks whether its backups are kept (default) or deleted, and lists what will be removed.
-* **Visibility:** `dzo backup list [<name>]` (with sizes, reason, pinned, expiry per retention), metrics `dzo_backup_count{instance,backend}`,
-  `dzo_backup_bytes{instance,backend}`, `dzo_backup_oldest_timestamp`, and the web UI backup page.
-* **Tests:** retention selection is a pure function (property tests: never below `min_keep`, never pinned, never outside the root, newest always kept),
-  plus backend integration tests on a loopback btrfs filesystem in CI.
+### Retention and cleanup
 
-Hook backends manage their own retention (e.g. `restic forget --prune`). dzo can call an optional `prune` command of the hook after each
-backup and on the daily timer, with the same `keep`/`max_age` values passed as env.
+* **Settings** (defaults in `site.yaml`, override per instance):
+  ```yaml
+  backup:
+    before: [update, mod_update, mission_update, config_change]
+    schedule: null                    # e.g. "*-*-* 00/6:00" for periodic snapshots
+    keep: 20                          # total per instance
+    keep_by_reason: {mod_update: 8, update: 10, scheduled: 12}
+    max_age: 30d                      # optional
+    min_keep: 3                       # never go below, regardless of age
+    min_free_bytes: 50GiB             # before snapshotting, prune the oldest to keep this free; never below min_keep/pinned
+  ```
+* **Pinned** snapshots (`dzo backup pin <id>`) and the snapshots referenced by an in-progress restore are never pruned automatically.
+* **Index as source of truth:** each snapshot is recorded in the DB (id, instance, reason, created_at, path, state
+  `creating` → `complete` | `failed` → `deleting` → `deleted`, pinned). Pruning only acts on indexed entries and verifies that the path is a direct child of
+  `${paths.snapshots}/<instance>/`. It never globs, never follows symlinks, and never touches instance subvolumes.
+* **When cleanup runs:** after every successful snapshot (only then, so a failure never reduces the number of good snapshots), via the daily
+  `dzo-backup-prune.timer`, and on demand with `dzo backup prune [<name>] [--dry-run]`.
+* **Deletion (unprivileged-safe):** try `BTRFS_IOC_SNAP_DESTROY` (instant, allowed with `user_subvol_rm_allowed`). On EPERM, clear the read-only flag
+  (allowed for the owner) and remove the tree recursively, then `rmdir` the empty subvolume (allowed for the owner). This path was verified
+  unprivileged; it is slower (proportional to the file count) but needs no rights. Deletions are idempotent and resumable (`deleting` state). Failures are
+  alerted (metrics, Discord, Icinga).
+* **Leftovers:** interrupted `creating` entries are cleaned up. Directories in the snapshot root that are not in the index are **reported, not deleted**
+  (`--adopt-orphans` / `--delete-orphans` to act). Missing snapshots are marked `missing`.
+* Removing an instance asks whether its snapshots are kept (default) or deleted.
 
-**Restore:** `dzo restore <name> <backup-id>` works for the built-in backends (the instance is stopped, a safety snapshot of the current state is taken,
-then restore). Hook backends can register a `restore` command. Every restore is audited.
+### Restore
 
-Config example (`instance.yaml`):
-```yaml
-backup:
-  before: [update, mod_update, config_change]     # render: false by default
-  backends:
-    - type: btrfs-snapshot
-      keep: 10                                   # total per instance/backend
-      keep_by_reason: {mod_update: 5, update: 10}
-      max_age: 30d
-      min_keep: 3
-    - {type: archive, keep: 3, max_bytes: 200GiB, min_free_bytes: 50GiB}
-    - {type: hook, exec: hooks/restic-backup.sh, timeout: 30m, on_failure: warn}
-  on_failure: abort
-```
+* **Full restore** `dzo restore <name> <id>`: stop the instance → take a safety snapshot (`pre_restore`) → rename the live subvolume aside
+  (`.<name>.replaced-<ts>`, same filesystem, allowed for the owner) → create a **writable snapshot** of the backup at the instance path (instant) →
+  start. The replaced subvolume is kept as a snapshot entry (reason `replaced`) and follows retention.
+* **Partial restore** `dzo restore <name> <id> --path mpmissions/<map>/storage_1` (or a mod's data dir): `cp -a --reflink=always` from the
+  read-only snapshot into the stopped instance, after a safety snapshot. Useful to roll back only player data or only one mod's files.
+* **Browse:** snapshots are plain read-only directories, so `dzo backup diff <id> [<id2>|live]` shows changed files, and the web UI offers a file browser/download.
+* Every restore is audited and notified.
 
-This complements the per-render manifest snapshots of changed files (§C6), which stay as a cheap, always-on safety net.
+### Offsite copies (optional)
+
+* dzo does not ship data offsite itself. An optional **`post_backup` hook** receives the path of the new read-only snapshot (a consistent
+  source), e.g. to run `restic backup` or `borg create` (Debian packages) on it. Its failure is reported but does not affect the local snapshot.
+
+### Visibility and tests
+
+* `dzo backup list [<name>]` (size estimate, reason, pinned, expiry per retention), metrics `dzo_backup_count{instance}`,
+  `dzo_backup_last_success_timestamp{instance,reason}`, `dzo_backup_failures_total`, `dzo_backup_prune_failures_total`, and a web UI page.
+* Retention selection is a pure function covered by property tests: never below `min_keep`, never pinned, only inside the root, newest always kept.
+  The snapshot/delete/restore paths are integration-tested on a **loopback btrfs** filesystem in CI (mounted once with root in the job setup, then
+  tests run unprivileged, both with and without `user_subvol_rm_allowed`).
+
+The per-render copies of changed/drifted managed mission files (§C6) remain as a fine-grained complement ("warn, backup, overwrite" per file).
 
 ---
 
@@ -1422,9 +1447,9 @@ internal/
   ce/                       XML/JSON merge + normalisation (etree, dzce adapters)
   servercfg/                serverDZ.cfg parser/writer
   battleye/                 BE cfg, built-in rcon protocol client + event parser, restart sequence
-  backup/                   pre-change backup triggers, btrfs/reflink/archive backends, hook runner, retention, restore
+  backup/                   btrfs subvolume/snapshot ioctls, triggers, retention + cleanup, restore, DB backup, post_backup hook
   quadlet/                  unit + timer templates, generation, systemd (dbus) control
-  instance/                 lifecycle, status, backup/restore
+  instance/                 lifecycle, status, wipe
   update/                   update orchestration, policies
   health/                   in-container probes (startup/live), A2S
   monitor/                  status model, Prometheus metrics, /status endpoint, Icinga checks (plugin API, remote)
@@ -1441,6 +1466,7 @@ internal/
 images/runtime/Containerfile, images/steamcmd/Containerfile
 debian/                     Debian packaging (§C14)
 contrib/icinga2/            CheckCommand definitions + examples
+contrib/backup-hooks/       example post_backup hooks: restic, borg
 .github/workflows/, .gitlab-ci.yml   CI (§C15)
 testdata/golden/…           legacy renderer outputs (see E)
 docs/
@@ -1468,7 +1494,8 @@ Each phase ends with a working, deployable state.
   keep-alive, behaviour on server restart, and the event message formats (connect/GUID/chat/kick) captured as fixtures.
 * **S5** host networking with several instances: port layout, RCon bound to localhost, A2S probe from inside the container with both network modes.
 * **S6** quadlet/podman features on **trixie's podman 5.4.2** (VM): `HealthStartup*`, `HealthOnFailure=kill` + `Restart=always`, `Notify=healthy`, nested `Volume=` ordering, `ExecStartPre` time limits, `.build` units in rootless mode, timers generated for the `dayz` user.
-* **S7** confirm the host filesystem (btrfs?) and reflink/snapshot behaviour for caches and mission snapshots.
+* **S7** confirm the host filesystem (btrfs?), `cp --reflink` behaviour for the download cache generations, and **unprivileged subvolume create/snapshot +
+  `ro false` + `rm -rf` deletion on the trixie kernel (6.12)** as the `dayz` user, incl. files written by the rootless game container.
 * **S8** (end of Phase 2) `dzo-admin` feasibility with the `dayz-dev` skill: `RestApi` polling of `127.0.0.1` from a servermod (latency, stability), and server-side-only implementation of message/teleport/spawn/vehicle repair+delete; state push of all players/vehicles (payload size, server FPS impact); identity events on connect (SteamID64, BE GUID, IP) and the enumeration of spawnable item classes; class-watch tracking technique for the marker API and the soft-dependency mechanism (`#ifdef` define) for third-party mods.
 
 ### Phase 1 — Core + CLI, single instance parity
@@ -1483,7 +1510,7 @@ Each phase ends with a working, deployable state.
 
 ### Phase 2 — Automation, monitoring, packaging, migration
 * Update engine with policies and timers (hourly check), per-instance maintenance restart timers, GC, rollback pins,
-  log rotation/crash summary, **pre-change backups/snapshots incl. before automatic mod updates (§C20)** + restore, hooks (+ traderstocks/weather as hooks).
+  log rotation/crash summary, **btrfs snapshot backups incl. before automatic mod updates, retention/cleanup, restore (§C20)**, hooks (+ traderstocks/weather as hooks).
 * `dzo-exporter` complete (`/metrics`, `/status`, auth/TLS), remote Icinga checks + shipped CheckCommands; Discord notifications (default + per-server webhooks).
 * Debian package (§C14) built in both CIs as an artifact, and `dzo setup`.
 * `dzo import legacy` for each branch: generates `instances/<name>/`, splits `files/mods` into shared
@@ -1491,7 +1518,7 @@ Each phase ends with a working, deployable state.
   `files/custom` (mounted as `/profiles/custom` in legacy) into instance overlays, **moves the live `mpmissions` volume
   content as-is** (never regenerated), diffs it against pristine and converts hand-made changes of managed files into overlays (so the first render does not revert them), plus profiles (mod configs, BE, logs) and the servermpmissions source. Mod
   order is taken from the running `-mod=` line, and cron/restart schedules are translated into timers.
-* Cut-over per server: announce → stop legacy unit → backup → import → start → verify (Icinga green) → disable legacy user units and cron jobs.
+* Cut-over per server: announce → stop legacy unit → import into a new subvolume (legacy volumes stay untouched as the fallback) → initial snapshot → start → verify (Icinga green) → disable legacy user units and cron jobs.
 
 ### Phase 3 — Web platform
 * `dzo serve` + auth + dashboard + instance/mod management + RCon console + jobs + SSE logs; optionally takes over scheduling.
@@ -1551,11 +1578,12 @@ Each phase ends with a working, deployable state.
 * R4a **Steam authentication needs a human**: password + Steam Guard (e-mail/mobile code or app confirmation), and cached sessions expire unpredictably. Updates stall until someone logs in again. Mitigations: interactive pty-driven login in the CLI and web, early detection by a proactive probe, pause (not fail) of the update pipeline, Discord/Icinga/metrics alerts, no automatic password retries (lockout protection), optional encrypted password storage (§C7).
 * R4b Steam changes steamcmd prompts or the login flow. Mitigation: prompt patterns in one place with fixtures, a `--passthrough` raw terminal fallback, and an alert on unknown output.
 * R5 Load-order changes during migration (legacy order was effectively random). Mitigation: import the current running `-mod=` line from `/tmp/mod_command_line` of the live containers.
-* R6 **Mission data loss** is the worst case. Mitigations: never delete unmanaged paths, snapshot before every apply, validation in staging before touching live, full backup before import/reinit, and golden + property tests ("render never touches paths outside the manifest").
+* R6 **Mission data loss** is the worst case. Mitigations: never delete unmanaged paths, copies of changed managed files before every apply, validation in staging before touching live, mandatory btrfs snapshots before updates and destructive operations, and golden + property tests ("render never touches paths outside the manifest").
 * R8 A mod or the game rewrites a file that ships in the mission repo, so every render produces "drift" and overwrites runtime data. Mitigations: drift is always backed up + notified, recurring drift on the same file suggests adding it to `mission.unmanaged`, and the importer seeds `unmanaged` from the S2 inventory.
+* R9 **btrfs is required** for instance data. Hosts without btrfs need a btrfs data volume (partition/LV, or loopback image as a stop-gap). Unprivileged snapshot deletion without `user_subvol_rm_allowed` is slow for big trees. Mitigation: `dzo setup` checks and recommends the mount option, and the deletion fallback is tested in CI.
 * R7 Older podman on the host lacks `HealthStartup*`/`Notify=healthy` (S6). Fallback: a single `HealthCmd` with a long `HealthStartPeriod` (legacy style), plus the host-side watchdog in `dzo-status`.
 
 **Assumptions**
 
-* One host for now, x86_64, Debian trixie (podman 5.4.2, systemd 257), systemd user session for `dayz`.
+* One host for now, x86_64, Debian trixie (podman 5.4.2, systemd 257), systemd user session for `dayz`, the configured instance/snapshot paths on btrfs.
 * The five servers keep their current ports.
