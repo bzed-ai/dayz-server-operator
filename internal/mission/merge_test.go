@@ -172,7 +172,7 @@ func TestRegisterCEFolderWrongRootErrors(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 	if err := RegisterCEFolder(staging, "cfgeconomycore.xml", "mod_1", nil); err == nil {
-		t.Fatal("expected an error for a non-<economy> root")
+		t.Fatal("expected an error for a non-<economycore> root")
 	}
 }
 

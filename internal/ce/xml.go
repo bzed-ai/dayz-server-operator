@@ -60,17 +60,17 @@ type CEFile struct {
 }
 
 // AppendCEFolder registers a new <ce folder="folder"> block (with the given
-// files, in order) at the end of cfgeconomycore.xml's <economy> root,
+// files, in order) at the end of cfgeconomycore.xml's <economycore> root,
 // creating the root if the document is empty. Registration order must be
 // deterministic (A8#1): callers drive that by calling this once per
 // mod/overlay in a fixed, documented order.
 func AppendCEFolder(doc *etree.Document, folder string, files []CEFile) error {
 	root := doc.Root()
 	if root == nil {
-		root = doc.CreateElement("economy")
+		root = doc.CreateElement("economycore")
 	}
-	if root.Tag != "economy" {
-		return fmt.Errorf("ce: cfgeconomycore.xml root is <%s>, want <economy>", root.Tag)
+	if root.Tag != "economycore" {
+		return fmt.Errorf("ce: cfgeconomycore.xml root is <%s>, want <economycore>", root.Tag)
 	}
 
 	ce := root.CreateElement("ce")

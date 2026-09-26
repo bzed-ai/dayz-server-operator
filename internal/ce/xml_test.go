@@ -91,8 +91,8 @@ func TestAppendCEFolderCreatesRootAndFiles(t *testing.T) {
 	}
 
 	root := doc.Root()
-	if root == nil || root.Tag != "economy" {
-		t.Fatalf("root = %+v, want <economy>", root)
+	if root == nil || root.Tag != "economycore" {
+		t.Fatalf("root = %+v, want <economycore>", root)
 	}
 	ces := root.SelectElements("ce")
 	if len(ces) != 1 {
@@ -127,7 +127,7 @@ func TestAppendCEFolderIsOrderedAndDeterministic(t *testing.T) {
 func TestAppendCEFolderRejectsWrongRoot(t *testing.T) {
 	doc := parseXML(t, `<notEconomy/>`)
 	if err := AppendCEFolder(doc, "mod_1", nil); err == nil {
-		t.Fatal("expected an error for a non-<economy> root")
+		t.Fatal("expected an error for a non-<economycore> root")
 	}
 }
 

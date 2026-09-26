@@ -105,7 +105,7 @@ func MergeXMLFile(stagingDir, relPath, rootTag string, overlay []byte, matchAttr
 }
 
 // RegisterCEFolder appends a <ce folder="folder"> entry (with files, in
-// order) to stagingDir/relPath's <economy> root (FR-09a). Callers must
+// order) to stagingDir/relPath's <economycore> root (FR-09a). Callers must
 // call this once per mod/overlay folder, in the instance's configured mod
 // order, so registration order stays deterministic (A8#1).
 func RegisterCEFolder(stagingDir, relPath, folder string, files []ce.CEFile) error {
