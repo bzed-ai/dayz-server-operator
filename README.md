@@ -165,9 +165,13 @@ relying on them, roughly in the order they'd bite:
   fixture) that ships an unrapified `config.cpp`. Compressed
   (`Cprs`/LZSS) PBO entries are also not decoded.
 - **BattlEye's `players` command output format** (`internal/instance`'s
-  graceful-restart kick sequence) and the RCon client's own timeout/
-  reconnect/edge-case behaviour under real network conditions (tracked
-  as a dedicated follow-up).
+  graceful-restart kick sequence) and the event message patterns
+  (`internal/battleye`'s connect/GUID/chat/kick regexes, spike S4) are
+  not confirmed against a real server. Timeout/error/concurrency paths
+  in the RCon client itself are now covered by a race-detector-clean
+  test pass, but there is still no automatic reconnect-with-backoff:
+  once the read loop hits a connection error, that `Client` is done and
+  callers have to notice and re-`Dial`.
 - **A2S `AppID` truncation** (`internal/a2s`): the wire field is a signed
   16-bit int; real DayZ app ids may wrap. Documented on `InfoResponse`.
 - **The `enfMain` process name** (`internal/health`'s process-existence

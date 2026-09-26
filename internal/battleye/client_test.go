@@ -294,6 +294,208 @@ func TestConnectionLostFailsPendingCommand(t *testing.T) {
 	}
 }
 
+func TestDialMalformedLoginResponse(t *testing.T) {
+	s := newFakeServer(t)
+	go func() {
+		s.recv()
+		// Not a valid BE packet at all (no 'B','E' header) - login must
+		// surface a decode error, not hang until the timeout.
+		if _, err := s.conn.WriteToUDP([]byte("garbage"), s.remote); err != nil {
+			t.Errorf("write garbage: %v", err)
+		}
+	}()
+
+	start := time.Now()
+	_, err := Dial(s.addr(), "pw", WithLoginTimeout(2*time.Second))
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("expected a decode error for a malformed login response")
+	}
+	if elapsed > time.Second {
+		t.Errorf("Dial took %v, want it to fail fast on a decode error rather than wait out the login timeout", elapsed)
+	}
+}
+
+func TestDialResolveFailure(t *testing.T) {
+	if _, err := Dial("not a valid address", "pw"); err == nil {
+		t.Fatal("expected a resolve error")
+	}
+}
+
+func TestDialConnectionRefused(t *testing.T) {
+	// Nothing listens here; on Linux this reliably surfaces as ECONNREFUSED
+	// on the next read, well before the login timeout - but the test only
+	// asserts an error occurs, not the exact latency, in case that varies
+	// by platform/sandbox.
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 0})
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := conn.LocalAddr().String()
+	_ = conn.Close()
+
+	if _, err := Dial(addr, "pw", WithLoginTimeout(2*time.Second)); err == nil {
+		t.Fatal("expected an error dialing an address nothing listens on")
+	}
+}
+
+func TestCommandAlreadyExpiredContext(t *testing.T) {
+	s := newFakeServer(t)
+	go acceptLogin(t, s)
+	c := dialFake(t, s, "pw")
+	go func() { _, _ = s.tryRecv() }() // consume the command, never reply
+
+	ctx, cancel := context.WithTimeout(context.Background(), 0)
+	defer cancel()
+	<-ctx.Done() // guarantee it is already expired before Command is even called
+
+	_, err := c.Command(ctx, "players")
+	if err == nil {
+		t.Fatal("expected an error for an already-expired context")
+	}
+}
+
+func TestCommandContextCancelled(t *testing.T) {
+	s := newFakeServer(t)
+	go acceptLogin(t, s)
+	c := dialFake(t, s, "pw")
+	go func() { _, _ = s.tryRecv() }() // consume the command, never reply
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { _, err := c.Command(ctx, "players"); done <- err }()
+
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected an error after cancellation")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Command did not return after ctx was cancelled")
+	}
+}
+
+func TestUnsolicitedResponseForUnknownSeqIsDroppedSafely(t *testing.T) {
+	s := newFakeServer(t)
+	go acceptLogin(t, s)
+	c := dialFake(t, s, "pw")
+
+	// Send a Command-type response for a seq nobody registered (e.g. a
+	// stale/duplicate packet, or a response that arrived after the
+	// original Command already gave up). The client must drop it without
+	// panicking, and subsequent real commands must still work.
+	go func() {
+		body := s.recv()
+		seq := body[2]
+		s.send(PacketCommand, 200, 'b', 'o', 'g', 'u', 's') // unrelated seq, never requested
+		s.send(PacketCommand, seq, 'o', 'k')
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	resp, err := c.Command(ctx, "players")
+	if err != nil {
+		t.Fatalf("Command: %v", err)
+	}
+	if resp != "ok" {
+		t.Errorf("resp = %q, want ok (the bogus packet must not have disrupted it)", resp)
+	}
+}
+
+func TestMalformedServerMessageDroppedWithoutCrashing(t *testing.T) {
+	s := newFakeServer(t)
+	go acceptLogin(t, s)
+	c := dialFake(t, s, "pw")
+
+	// A Message-type packet with no sequence byte (too short to decode).
+	go func() {
+		if _, err := s.conn.WriteToUDP(wrap([]byte{packetMarker, byte(PacketMessage)}), s.remote); err != nil {
+			t.Errorf("write malformed message: %v", err)
+		}
+	}()
+
+	// The client must keep working afterwards: a real command should
+	// still complete normally.
+	time.Sleep(50 * time.Millisecond)
+	go func() {
+		body := s.recv()
+		s.send(PacketCommand, body[2], 'o', 'k')
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if _, err := c.Command(ctx, "players"); err != nil {
+		t.Fatalf("Command after malformed message: %v", err)
+	}
+}
+
+func TestKeepAliveStopsAfterClose(t *testing.T) {
+	s := newFakeServer(t)
+	go acceptLogin(t, s)
+	c, err := Dial(s.addr(), "pw", WithLoginTimeout(2*time.Second), WithKeepAliveInterval(10*time.Millisecond))
+	if err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+
+	if err := c.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	// No further keep-alives should arrive; give any in-flight tick a
+	// window to (incorrectly) fire, then confirm nothing shows up.
+	_, err = s.tryRecv()
+	if err == nil {
+		t.Error("expected no further packets after Close, but one arrived")
+	}
+}
+
+func TestConcurrentCommandsGetDistinctSequenceNumbers(t *testing.T) {
+	s := newFakeServer(t)
+	go acceptLogin(t, s)
+	c := dialFake(t, s, "pw")
+
+	const n = 20
+	seen := make(chan byte, n)
+	go func() {
+		for i := 0; i < n; i++ {
+			body := s.recv()
+			seq := body[2]
+			seen <- seq
+			s.send(PacketCommand, seq, 'o', 'k')
+		}
+	}()
+
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_, err := c.Command(ctx, "players")
+			errs <- err
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			t.Errorf("Command: %v", err)
+		}
+	}
+
+	// Read exactly n values rather than closing seen from this goroutine:
+	// the server goroutine (not this one) is what writes to it, and
+	// closing it here without a real synchronization edge back to that
+	// goroutine's last write is a data race the race detector correctly
+	// flags, even though the UDP round-trip makes it logically safe.
+	seqs := map[byte]bool{}
+	for i := 0; i < n; i++ {
+		seq := <-seen
+		if seqs[seq] {
+			t.Errorf("sequence number %d used more than once among %d concurrent commands", seq, n)
+		}
+		seqs[seq] = true
+	}
+}
+
 func TestCloseIsIdempotentAndRejectsCommands(t *testing.T) {
 	s := newFakeServer(t)
 	go acceptLogin(t, s)

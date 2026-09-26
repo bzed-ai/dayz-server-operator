@@ -37,7 +37,17 @@ type multipartAssembly struct {
 	got    int
 }
 
-// Client is a connected BattlEye RCon session.
+// Client is a single BattlEye RCon session: one Dial, one login handshake,
+// then Command calls until Close. It has no automatic reconnect: once the
+// read loop hits a connection error, every pending and future Command
+// fails and the Client is done (§C8 describes a higher-level "connection
+// manager" - one long-lived session shared by all callers, with automatic
+// reconnect and backoff - but that layer is not built yet; a caller
+// needing it currently has to Dial again itself and notice the old Client
+// is dead via a failed Command). Nothing here has been exercised against
+// a live BattlEye server; the timeout/error paths are tested against
+// fakes (§C15) and a race-detector-clean concurrency stress test, not
+// real network conditions.
 type Client struct {
 	conn *net.UDPConn
 
