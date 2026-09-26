@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de> -->
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="dzo logo">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#2f3b2c"/>
+      <stop offset="100%" stop-color="#1c241a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- hexagonal operator badge -->
+  <polygon points="120,10 216,62 216,166 120,218 24,166 24,62"
+           fill="url(#bg)" stroke="#c1502e" stroke-width="6"/>
+  <polygon points="120,26 202,70 202,158 120,202 38,158 38,70"
+           fill="none" stroke="#7a8a6e" stroke-width="2" stroke-opacity="0.6"/>
+
+  <!-- radio tower / RCon signal glyph -->
+  <g stroke="#e7e2d3" stroke-width="4" fill="none" stroke-linecap="round">
+    <line x1="120" y1="86" x2="120" y2="150"/>
+    <line x1="103" y1="150" x2="137" y2="150"/>
+    <line x1="108" y1="132" x2="132" y2="132"/>
+    <path d="M100,78 A28,28 0 0 1 140,78" stroke="#c1502e"/>
+    <path d="M92,68 A40,40 0 0 1 148,68" stroke="#c1502e" stroke-opacity="0.6"/>
+  </g>
+  <circle cx="120" cy="86" r="5" fill="#c1502e"/>
+
+  <!-- wordmark -->
+  <text x="120" y="182" text-anchor="middle"
+        font-family="'DejaVu Sans Mono', 'Courier New', monospace" font-size="30"
+        fill="#e7e2d3" letter-spacing="0.5">dzo</text>
+</svg>
