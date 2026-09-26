@@ -51,6 +51,7 @@ Legacy source analysed: `../dayzdockerserver` (branches `main`, `chernarus`, `li
 | D31 | Backups | **Built into dzo via btrfs snapshots**: instances must live on btrfs subvolumes (created unprivileged), read-only snapshots before changes (incl. automatic mod updates, with the server stopped), configurable retention with safe cleanup, full/partial restore, and an optional `post_backup` hook for offsite copies (§C20). |
 | D32 | Migration | **Fresh start, no data import.** Legacy servers are only a config source: a converter builds an **example site config** from the legacy git branches (never from volumes), which is reviewed by hand. New worlds, profiles and player data start empty (§C21). |
 | D33 | Boot test | A render is only proven good once a real `DayZServer` has booted it. **`dzo test boot`** starts the server headless on the rendered output (mission, serverDZ.cfg, keys, mods) in a disposable tree, waits for readiness, stops it and checks the logs (script compile errors, script modules not loaded, CE/mission errors). The method follows the `dayz-dev` skill (`testing/local-server.md`). **Development tool only:** it runs on developer machines (or a dedicated test runner), **never on a host with live servers**, and is not part of the update or restart path (§C22). |
+| D34 | Web authentication | **Password + TOTP MFA required by default** for every web user (enrolment is forced at first login, no skip). Local users with argon2id, one-time recovery codes, server-side sessions, step-up re-authentication for sensitive actions, lockout protection. OIDC is optional and must prove MFA, or local TOTP is required on top. No default passwords: the first admin is created with the CLI via a one-time enrolment link (§C12). |
 
 ---
 
@@ -316,6 +317,7 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 | FR-35 | Item spawning with the full type list (from `dzo-admin` + parsed CE XML), kits/presets | web admin |
 | FR-36 | Scheduled and one-off broadcast messages, direct messages | web admin |
 | FR-37 | Per-server RBAC, audit log, API tokens, privacy (IP retention, export/erasure) | web admin |
+| FR-38 | **Web authentication with MFA**: password + TOTP by default (forced enrolment), recovery codes, optional WebAuthn/passkeys, optional OIDC with an MFA requirement, session management, step-up for sensitive actions, lockout protection, CLI user bootstrap/reset (§C12) | – |
 
 ### Non-functional
 
@@ -999,6 +1001,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 | `DEVELOPMENT` / `DONT_START` | `dzo render <name> --dry-run --diff`, `dzo shell <name>` |
 | (new) | `dzo site pull/status/commit/validate`, `dzo notify test`, `dzo legacy convert-config --repo <checkout> --ref <branch>…` (example site config, §C21) |
 | (new) | `dzo test boot <name> [--server steam\|<dir>] [--mods-from steam-client\|cache\|<dir>] [--native\|--container] [--keep-tree] [--vanilla]` (headless boot test, development only, §C22) |
+| (new, phase 3) | `dzo user list\|add\|disable\|enable\|reset-password\|reset-mfa\|revoke-sessions <name>` (web user bootstrap and recovery; `add` prints a one-time enrolment link, §C12) |
 
 ## C11. Hooks and extensibility
 
@@ -1020,13 +1023,57 @@ Icinga runs on another host, so everything is reachable over the network. No loc
   **schedules (restarts, broadcasts)**, mod search (Steam Web API), jobs, **backups (list, diff, browse, pin, restore)**, audit log, and later an XML/JSON editor with `dzce`
   validation (the legacy XmlTree idea).
 * JSON API `/api/v1/…` over the same service layer (Discord bots, scripts). Every UI action is an API call.
-* Auth: local users (argon2id, optional TOTP 2FA) or OIDC / trusted reverse-proxy header. **RBAC scoped per server**: roles
+* Auth: see **Authentication** below (password + TOTP by default). **RBAC scoped per server**: roles
   `admin` / `moderator` / `operator` / `viewer`, assignable globally or per instance (e.g. a moderator may kick/ban on deerisle only).
   Fine-grained permissions under the roles (`player.kick`, `player.ban`, `player.ban.global`, `player.spawn_item`, `player.teleport`,
   `server.restart`, `broadcast.manage`, `pii.view` for IPs, …). CSRF protection, session timeouts, and an audit entry for every mutating call.
 * **Database (§C18):** SQLite by default, PostgreSQL optional, used for users, audit, jobs, players, bans, schedules and caches. Configuration of
   servers stays in the site repo (git commit per change, with author). Operational data (players, bans, schedules created in the UI)
   lives in the database.
+
+### Authentication (D34)
+
+**Default: password + TOTP for every user.** `auth.mfa: required` is the default. `optional` exists only as an explicit config choice (e.g. a
+single-admin setup behind a VPN) and is shown as a warning on the dashboard and in `dzo check remote`.
+
+* **Bootstrap, no default passwords.** The first admin is created on the host: `dzo user add <name> --role admin` prints a **one-time enrolment
+  link** (random token, valid 24 h, single use). The link leads to: set password → scan the TOTP QR code → confirm with a code → get recovery codes.
+  The account is only usable after that. Admins invite further users the same way from the UI. The CLI stays the recovery path:
+  `dzo user list|add|disable|enable|reset-password|reset-mfa|revoke-sessions <name>`. It runs as `dayz` on the host, so the unix account is the
+  trust boundary, and every CLI action is audited with source `cli`.
+* **Passwords:** argon2id (`golang.org/x/crypto`), minimum length 12, no composition rules (NIST SP 800-63B), a check against a small built-in list of
+  common passwords, and the username is not allowed as the password. Changing the password needs the current password and a TOTP code.
+* **TOTP** (RFC 6238, SHA-1, 6 digits, 30 s, so every authenticator app works): ±1 step tolerance, **replay protection** (the last accepted time step
+  per user is stored, so a code works only once), and the secret is **encrypted at rest** in the DB with a key from `secrets/` (created by `dzo setup`,
+  optionally sealed with `systemd-creds`). The QR code is rendered server-side as an inline PNG, and the secret is also shown as text. Libraries: `pquerna/otp`
+  (Apache-2.0) and a QR encoder (e.g. `skip2/go-qrcode`, MIT), both covered by the licence check.
+* **Recovery codes:** 10 one-time codes, stored as argon2id hashes, shown once, regenerable (needs a TOTP code). Using one is audited and notified.
+* **WebAuthn / passkeys (optional, later phase):** `go-webauthn/webauthn` (BSD-3) as an additional second factor next to TOTP. TOTP stays the default and
+  the one factor every user has.
+* **Login flow:** username + password → a short-lived pre-auth state (5 min, bound to the browser) → TOTP or recovery code → session. Error messages
+  are generic ("invalid credentials") and do not reveal whether a user exists. Password and code attempts are verified in constant time.
+* **Brute-force and lockout protection:** rate limits per IP and per account, with exponential backoff. After N failed attempts (default 10) the account is
+  locked temporarily (default 15 min), never permanently, so an attacker cannot lock admins out forever; the CLI can unlock. Lockouts, recovery-code use, MFA resets
+  and (optionally) logins from a new country (GeoIP) are sent to the admin Discord target.
+* **Sessions:** server-side in the DB (random 256-bit id; only its hash is stored). Cookie `__Host-dzo_session` with `Secure`, `HttpOnly` and
+  `SameSite=Strict`. Idle timeout (default 30 min) and absolute lifetime (default 12 h). Users can see and revoke their sessions (browser, IP, country, last use), admins
+  can revoke anyone's. All sessions of a user are revoked on a password change, MFA reset or when the user is disabled. The session id is rotated at login.
+* **Step-up re-authentication:** sensitive actions need a TOTP code entered in the last 5 minutes. These are user/role management, global or country/ASN bans, restart or broadcast to
+  all servers, wipe/restore/reinit, secret changes (webhooks, RCon rotation), and API token creation.
+* **CSRF and browser hardening:** `SameSite=Strict` plus a per-session CSRF token sent by htmx as a header (`hx-headers`) and checked on every
+  mutating request, an `Origin`/`Referer` check, a strict CSP (no inline scripts; htmx/Leaflet from local static paths), `X-Frame-Options: DENY`, and HSTS when served over HTTPS.
+* **Transport:** `Secure` cookies need HTTPS. `dzo serve` binds to localhost by default and sits behind a reverse proxy, or uses its own TLS listener
+  with hot-reloaded certificates (as the exporter, §C9). Plain HTTP is refused for non-loopback listeners unless `auth.allow_insecure_http` is set explicitly (dev only).
+* **OIDC (optional):** `coreos/go-oidc` (Apache-2.0), authorisation code flow with PKCE. MFA is delegated to the IdP only if the ID token proves
+  it (`amr` contains `mfa`/`otp`/`hwk`, or a configured `acr` value). Otherwise dzo requires its own TOTP on top (`oidc.require_mfa: true`, default).
+  Roles can be mapped from a groups claim. Local accounts stay available as a break-glass path (can be disabled).
+* **Trusted reverse-proxy header** (e.g. an authenticating proxy): off by default. It is only honoured when the request comes from a configured proxy
+  address, dzo listens on loopback or a unix socket, and the header name is configured. The proxy must then enforce MFA, which the docs state clearly.
+* **API tokens** (bots, scripts): not interactive, so there's no TOTP. Instead they are scoped (permissions + instances), have an expiry, are shown once and stored hashed,
+  and belong to a named service account. They can never manage users, roles or tokens. Creating a token needs step-up.
+* **Audit:** login success/failure, lockout, MFA enrolment/reset, recovery-code use, session revocation, token create/revoke, role changes.
+* **Tests:** RFC 6238 test vectors, a fake clock for step tolerance and replay, lockout/backoff, CSRF rejection, session expiry/rotation, the OIDC flow against
+  a fake IdP, and the enrolment link lifecycle. All count toward the 85 % gate.
 
 ## C13. Security
 
@@ -1035,6 +1082,8 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 * RCon password per instance, generated, rotatable (`dzo rcon rotate`), bound to localhost when on host network where possible (`RConIP`, spike S5).
 * Hooks run with the operator user's rights. They come from the site repo, so the git repo is the trust boundary.
 * The status files for monitoring contain no secrets (no RCon passwords, no player IPs).
+* **Web UI:** password + TOTP MFA required by default, no default credentials, CLI-only bootstrap and recovery, server-side sessions, step-up for
+  sensitive actions (§C12 Authentication). TOTP secrets are encrypted at rest; passwords, recovery codes, session ids and API tokens are stored only as hashes.
 * **`dzo-admin` endpoint:** with `network: host` the game server shares the host network namespace, so any local process can reach the endpoint.
   The **per-instance token is the only guard** (constant-time compare, rotated on every render, 0600 file in the profile dir, one endpoint port per instance,
   bound to loopback / the pasta gateway only, rate-limited). Any other local user on the host is therefore trusted only as far as they cannot read `profiles/`.
@@ -1771,6 +1820,7 @@ internal/
   players/                  identity linking, sessions, stats, steam web api client, geoip
   moderation/               bans (all target types/scopes), enforcement, native ban list rendering, join policies
   schedule/                 one-off/recurring restarts and broadcasts, transient systemd timers
+  auth/ (phase 3)           users, argon2id, TOTP + recovery codes, enrolment links, sessions, step-up, lockout, OIDC, API tokens
   web/ (phase 3)            handlers, templates, static (embedded)
   legacy/                   config converter: legacy git branches → example site config + report (no volumes)
   boottest/                 (development only) disposable server tree, Steam install locator (libraryfolders.vdf/appmanifest), process/container runner, log checks + pattern catalogue, baseline cache, refuses to run on hosts with instances
@@ -1838,7 +1888,7 @@ Each phase ends with a working, deployable state.
 * Fresh-start rollout per server (§C21): announce wipe → instance from example config → install → fresh mission → parallel test → switch ports → retire legacy.
 
 ### Phase 3 — Web platform
-* `dzo serve` + auth + dashboard + instance/mod management + RCon console + jobs + SSE logs; optionally takes over scheduling.
+* `dzo serve` + **authentication with TOTP MFA by default** (§C12, D34; user bootstrap via CLI) + dashboard + instance/mod management + RCon console + jobs + SSE logs; optionally takes over scheduling.
 * Database layer (SQLite + PostgreSQL), users/RBAC/audit; optional ClickHouse analytics store (§C19) with replay/heatmap/statistics features.
 * Players & moderation (§C18): identity/sessions, player list + pages, Steam info, GeoIP, kick/ban (all scopes/targets), restarts & one-off timers, broadcasts, item spawning with type list.
 * Map tile pipeline (§C17) + tile serving/export.
