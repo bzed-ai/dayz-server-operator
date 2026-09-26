@@ -34,10 +34,17 @@ design — decisions, legacy analysis, architecture and the phased roadmap —
 lives in [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md); user-facing
 documentation is a [Sphinx site](docs/) under `docs/`.
 
-> **Status:** Phase 1 (core + CLI) is in progress. The packages below are
-> implemented and tested; instance lifecycle (mission rendering, mod/product
-> installs, quadlet-managed containers, backups, monitoring) is still being
-> built. Track progress in the plan's [phased roadmap](IMPLEMENTATION_PLAN.md#part-e--phased-roadmap).
+> **Status:** Phase 1 (core + CLI) is substantially built: every package
+> below is implemented and tested, up to and including instance lifecycle
+> (quadlet/timer materialization, systemd start/stop/restart, the F3
+> restart-storm brake, the BattlEye graceful-restart sequence). What's not
+> built yet is wiring a *real* site-config instance end to end (resolving
+> its mission/mod/product config into the pieces the packages below take
+> as already-resolved input) and the phase 3+ web platform. See
+> [Needs live verification](#needs-live-verification) below for what
+> hasn't been checked against a real Steam account or DayZ server, and
+> the plan's [phased roadmap](IMPLEMENTATION_PLAN.md#part-e--phased-roadmap)
+> for what's tracked as still pending.
 
 ## What's here today
 
@@ -47,8 +54,19 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 | `internal/servercfg` | Parses/writes `serverDZ.cfg` and diffs two versions before adoption |
 | `internal/battleye` | A native BattlEye RCon client — login, commands, multi-packet responses, the connect/GUID/chat/kick event stream — no `bercon-cli`, no external RCon library |
 | `internal/ce` | JSON deep-merge and XML child-merge primitives for combining mission/mod/overlay data, plus `cfgeconomycore.xml` `<ce folder>` registration |
-| `internal/quadlet` | Renders podman quadlet `.container` units (health checks, host/publish networking, mounts) without relying on deprecated or newer-than-baseline podman tooling |
+| `internal/quadlet` | Renders podman quadlet `.container` units (health checks, host/publish networking, mounts, F3's start-rate limit) without relying on deprecated or newer-than-baseline podman tooling |
 | `internal/cache` | An immutable, generation-based download cache with atomic activation and safe garbage collection |
+| `internal/site` | The site-config repo's schema types (`site.yaml`/`instance.yaml`/overlays) and git plumbing (clone/pull/commit/push) |
+| `internal/mission` | The live mission render/apply pipeline: manifest tracking, apply-plan classification, atomic writes with a filehistory safety net, and the CE/XML/JSON merge dispatcher |
+| `internal/a2s` | The Valve A2S server-query protocol client (challenge handshake + `A2S_INFO`) |
+| `internal/health` | `dzo health startup`/`live` — process + A2S (+ optional RCon) probes for `HealthStartupCmd`/`HealthCmd` |
+| `internal/hooks` | Runs the `pre_start`/`post_stop`/... extension-point scripts with a `DZO_*` env contract and a JSON context |
+| `internal/notify` | Discord webhook notifications, per-event templates, and event coalescing |
+| `internal/monitor` | Prometheus `/metrics`, JSON `/status`, and Icinga/Nagios-compatible checks |
+| `internal/steam` | The interactive steamcmd login state machine (pty-driven prompt classifier) and a non-interactive mode for scheduled jobs |
+| `internal/product` | The update-window/batching scheduling decision, a Steam Web API mod-freshness client, and the steamcmd job runner for `+app_update`/`+workshop_download_item` |
+| `internal/moddeps` | CfgPatches `requiredAddons` dependency validation and load-order sorting, from a PBO or a plain-text `config.cpp` |
+| `internal/instance` | Ties the above into one instance's lifecycle: the F3 failed-render gate, quadlet+timer materialization, systemd start/stop/restart, and the BattlEye lock/kick graceful-restart sequence |
 | `cmd/dzo` | The CLI wiring all of the above together |
 
 ## Installing
@@ -97,6 +115,15 @@ $ dzo cache list /var/lib/dzo/cache/products/dayz-stable
   1234600
 
 $ dzo quadlet render instance.yaml > dzo-myserver.container
+
+$ dzo steam login --user mysteamaccount
+steamcmd password for mysteamaccount: ****
+login OK
+
+$ dzo mod deps mods/@MyMod/config.cpp --provides DZ_Data,DZ_Scripts --order
+all requiredAddons entries are satisfied
+
+$ dzo instance restart myserver --graceful --rcon-addr 127.0.0.1:2303 --rcon-password s3cret
 ```
 
 Run `dzo --help` (or `<command> --help`) for the full flag reference.
@@ -112,9 +139,45 @@ $ make licenses  # dependency licence allow-list check (D15)
 ```
 
 `.github/workflows/ci.yml` runs all of the above on every push, plus
-cross-compiled binary and `.deb` builds. See
+cross-compiled binary and `.deb` builds, and uploads both coverage and
+JUnit test results to Codecov. See
 [`CONTRIBUTING` notes in the plan](IMPLEMENTATION_PLAN.md#c15-testing-strategy-and-ci-d20-d21)
 for the full testing strategy.
+
+## Needs live verification
+
+This environment has no Steam account, no real DayZ install, and no
+podman/systemd user session to develop against, so everything above is
+built and tested against real, documented file/wire formats and
+fake-server/fake-script test doubles — not against the real thing. These
+are the specific spots that need checking against a live setup before
+relying on them, roughly in the order they'd bite:
+
+- **steamcmd's interactive prompts and job output** (`internal/steam`,
+  `internal/product`): the password/Steam-Guard/mobile-confirmation
+  prompt wording and the `+app_update`/`+workshop_download_item`
+  success/failure lines are reverse-engineered from community reports,
+  not exercised against a real account.
+- **Rapified `config.bin` decoding** (`internal/moddeps`): not
+  implemented at all yet. Real mod PBOs almost always ship this binary
+  format rather than a plain-text `config.cpp`, so `dzo mod deps`/
+  `cfgpatches` only works end to end today for the rare mod (or PBO
+  fixture) that ships an unrapified `config.cpp`. Compressed
+  (`Cprs`/LZSS) PBO entries are also not decoded.
+- **BattlEye's `players` command output format** (`internal/instance`'s
+  graceful-restart kick sequence) and the RCon client's own timeout/
+  reconnect/edge-case behaviour under real network conditions (tracked
+  as a dedicated follow-up).
+- **A2S `AppID` truncation** (`internal/a2s`): the wire field is a signed
+  16-bit int; real DayZ app ids may wrap. Documented on `InfoResponse`.
+- **The `enfMain` process name** (`internal/health`'s process-existence
+  check) is an assumption from plan notes, not confirmed against a
+  running server binary.
+- **Podman quadlet keys** (`HealthStartup*`, `HealthOnFailure=kill`,
+  `Notify=healthy`) need confirming on the actual target podman/systemd
+  versions (spike S6 in the plan).
+- **DayZ Experimental's app id/workshop app pairing** (1042420 consuming
+  workshop content via 221100) is assumed, not confirmed (spike S1).
 
 ## Licence
 
