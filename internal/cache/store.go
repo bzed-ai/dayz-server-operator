@@ -49,11 +49,11 @@ func (s *Store) withLock(fn func() error) error {
 		return err
 	}
 	lockPath := filepath.Join(s.Root, lockFileName)
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o640)
+	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // lockPath is s.Root (a dzo-configured cache dir) + a constant filename
 	if err != nil {
 		return fmt.Errorf("cache: open lock file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
 		return fmt.Errorf("cache: acquire lock: %w", err)
@@ -151,7 +151,7 @@ func (s *Store) SetCurrent(id string) error {
 		}
 		link := filepath.Join(s.Root, currentLinkName)
 		tmp := link + ".tmp"
-		os.Remove(tmp) //nolint:errcheck // best-effort cleanup of a stale temp link
+		_ = os.Remove(tmp) // best-effort cleanup of a stale temp link; SetCurrent below still catches a real problem
 		if err := os.Symlink(id, tmp); err != nil {
 			return fmt.Errorf("cache: create temp symlink: %w", err)
 		}
@@ -257,7 +257,7 @@ func (s *Store) GC(keep int) ([]string, error) {
 // (`cp -a --reflink=auto`, near-instant on btrfs, §C2), falling back to a
 // full copy everywhere else.
 func CopyGeneration(src, dst string) error {
-	cmd := exec.Command("cp", "-a", "--reflink=auto", src+"/.", dst)
+	cmd := exec.Command("cp", "-a", "--reflink=auto", src+"/.", dst) //nolint:gosec // src/dst are dzo-internal cache paths, never raw network/user input
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("cache: copy %s -> %s: %w: %s", src, dst, err, out)

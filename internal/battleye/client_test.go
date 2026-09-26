@@ -5,6 +5,7 @@ package battleye
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -24,30 +25,43 @@ func newFakeServer(t *testing.T) *fakeServer {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	t.Cleanup(func() { conn.Close() })
+	t.Cleanup(func() { _ = conn.Close() })
 	return &fakeServer{t: t, conn: conn}
 }
 
 func (s *fakeServer) addr() string { return s.conn.LocalAddr().String() }
 
 // recv reads one client packet and returns its validated body (from the
-// 0xFF marker on). It also records the client's address for send.
+// 0xFF marker on), failing the test on any error. Only call this from the
+// test's own goroutine (see tryRecv for use from a spawned goroutine:
+// t.Fatal must run in the test's own goroutine, staticcheck SA2002).
 func (s *fakeServer) recv() []byte {
 	s.t.Helper()
+	body, err := s.tryRecv()
+	if err != nil {
+		s.t.Fatal(err)
+	}
+	return body
+}
+
+// tryRecv is recv without calling t.Fatal, safe to use from a goroutine
+// that only ever consumes a packet without asserting on it (e.g. a fake
+// server that deliberately never replies).
+func (s *fakeServer) tryRecv() ([]byte, error) {
 	buf := make([]byte, ReadBufferSize)
 	if err := s.conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
-		s.t.Fatalf("SetReadDeadline: %v", err)
+		return nil, fmt.Errorf("SetReadDeadline: %w", err)
 	}
 	n, addr, err := s.conn.ReadFromUDP(buf)
 	if err != nil {
-		s.t.Fatalf("recv: %v", err)
+		return nil, fmt.Errorf("recv: %w", err)
 	}
 	s.remote = addr
 	body, err := unwrap(buf[:n])
 	if err != nil {
-		s.t.Fatalf("recv: invalid packet: %v", err)
+		return nil, fmt.Errorf("recv: invalid packet: %w", err)
 	}
-	return body
+	return body, nil
 }
 
 func (s *fakeServer) send(typ PacketType, rest ...byte) {
@@ -67,7 +81,7 @@ func dialFake(t *testing.T, s *fakeServer, password string, opts ...Option) *Cli
 	if err != nil {
 		t.Fatalf("Dial: %v", err)
 	}
-	t.Cleanup(func() { c.Close() })
+	t.Cleanup(func() { _ = c.Close() })
 	return c
 }
 
@@ -201,7 +215,7 @@ func TestCommandContextTimeout(t *testing.T) {
 	go acceptLogin(t, s)
 	c := dialFake(t, s, "pw")
 
-	go s.recv() // consume the command, never reply
+	go func() { _, _ = s.tryRecv() }() // consume the command, never reply
 
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
@@ -256,7 +270,7 @@ func TestConnectionLostFailsPendingCommand(t *testing.T) {
 	go acceptLogin(t, s)
 	c := dialFake(t, s, "pw")
 
-	go s.recv() // consume the command, never reply
+	go func() { _, _ = s.tryRecv() }() // consume the command, never reply
 
 	done := make(chan struct{})
 	var cmdErr error
@@ -268,7 +282,7 @@ func TestConnectionLostFailsPendingCommand(t *testing.T) {
 	// Simulate the socket disappearing out from under the read loop,
 	// without going through the normal Close() path.
 	time.Sleep(50 * time.Millisecond)
-	c.conn.Close()
+	_ = c.conn.Close()
 
 	select {
 	case <-done:

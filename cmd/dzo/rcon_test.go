@@ -22,26 +22,25 @@ func TestRconExecEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	go func() {
 		buf := make([]byte, 4096)
 		// login
-		n, remote, err := conn.ReadFromUDP(buf)
+		_, remote, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			return
 		}
-		_ = n
-		conn.WriteToUDP(loginOK(), remote)
+		_, _ = conn.WriteToUDP(loginOK(), remote)
 
 		// command
-		n, remote, err = conn.ReadFromUDP(buf)
+		n, remote, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			return
 		}
 		body := buf[6:n]
 		seq := body[2]
-		conn.WriteToUDP(commandOK(seq, "pong"), remote)
+		_, _ = conn.WriteToUDP(commandOK(seq, "pong"), remote)
 	}()
 
 	out, err := runCmd(t, "rcon", "exec",
@@ -70,7 +69,7 @@ func TestRconExecDialFailure(t *testing.T) {
 		t.Fatalf("listen: %v", err)
 	}
 	addr := conn.LocalAddr().String()
-	conn.Close() // now nothing is listening there
+	_ = conn.Close() // now nothing is listening there
 
 	start := time.Now()
 	_, err = runCmd(t, "rcon", "exec", "--addr", addr, "--password", "pw", "--timeout", "1s", "ping")

@@ -97,7 +97,7 @@ func Dial(addr, password string, opts ...Option) (*Client, error) {
 	}
 
 	if err := c.login(password); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, err
 	}
 

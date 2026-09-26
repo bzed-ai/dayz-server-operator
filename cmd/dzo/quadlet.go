@@ -132,7 +132,7 @@ func newQuadletRenderCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprint(cmd.OutOrStdout(), out)
+			_, _ = fmt.Fprint(cmd.OutOrStdout(), out)
 			return nil
 		},
 	}

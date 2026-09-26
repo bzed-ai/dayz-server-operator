@@ -116,7 +116,7 @@ func Default() *Config {
 
 // Load reads, defaults, resolves and validates the config file at path.
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path is an operator-supplied config location (CLI flag/systemd unit), not attacker input
 	if err != nil {
 		return nil, fmt.Errorf("config: read %s: %w", path, err)
 	}

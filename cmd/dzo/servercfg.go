@@ -22,7 +22,7 @@ func newServerCfgCmd() *cobra.Command {
 }
 
 func loadServerCfg(path string) (*servercfg.File, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path is a CLI argument the operator passes by design
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
@@ -45,7 +45,7 @@ func newServerCfgShowCmd() *cobra.Command {
 			}
 			for _, key := range f.Keys() {
 				e, _ := f.Get(key)
-				fmt.Fprintln(cmd.OutOrStdout(), e.String())
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), e.String())
 			}
 			return nil
 		},
@@ -69,17 +69,17 @@ func newServerCfgDiffCmd() *cobra.Command {
 			d := servercfg.DiffFiles(oldFile, newFile)
 			out := cmd.OutOrStdout()
 			if d.Empty() {
-				fmt.Fprintln(out, "no differences")
+				_, _ = fmt.Fprintln(out, "no differences")
 				return nil
 			}
 			for _, k := range d.Added {
-				fmt.Fprintf(out, "+ %s\n", k)
+				_, _ = fmt.Fprintf(out, "+ %s\n", k)
 			}
 			for _, k := range d.Removed {
-				fmt.Fprintf(out, "- %s\n", k)
+				_, _ = fmt.Fprintf(out, "- %s\n", k)
 			}
 			for _, c := range d.Changed {
-				fmt.Fprintf(out, "~ %s: %s -> %s\n", c.Key, c.Old, c.New)
+				_, _ = fmt.Fprintf(out, "~ %s: %s -> %s\n", c.Key, c.Old, c.New)
 			}
 			return nil
 		},

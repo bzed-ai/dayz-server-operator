@@ -34,7 +34,7 @@ func newRconExecCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("rcon: connect: %w", err)
 			}
-			defer client.Close()
+			defer func() { _ = client.Close() }()
 
 			ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 			defer cancel()
@@ -47,7 +47,7 @@ func newRconExecCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("rcon: command: %w", err)
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), resp)
+			_, _ = fmt.Fprintln(cmd.OutOrStdout(), resp)
 			return nil
 		},
 	}

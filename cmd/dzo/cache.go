@@ -42,7 +42,7 @@ func newCacheListCmd() *cobra.Command {
 				if g == current {
 					marker = "*"
 				}
-				fmt.Fprintf(out, "%s %s\n", marker, g)
+				_, _ = fmt.Fprintf(out, "%s %s\n", marker, g)
 			}
 			return nil
 		},
@@ -63,9 +63,9 @@ func newCacheGCCmd() *cobra.Command {
 			}
 			out := cmd.OutOrStdout()
 			for _, r := range removed {
-				fmt.Fprintf(out, "removed %s\n", r)
+				_, _ = fmt.Fprintf(out, "removed %s\n", r)
 			}
-			fmt.Fprintf(out, "removed %s generation(s), kept %s\n", strconv.Itoa(len(removed)), strconv.Itoa(keep))
+			_, _ = fmt.Fprintf(out, "removed %s generation(s), kept %s\n", strconv.Itoa(len(removed)), strconv.Itoa(keep))
 			return nil
 		},
 	}

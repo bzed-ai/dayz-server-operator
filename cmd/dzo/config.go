@@ -30,10 +30,10 @@ func newConfigValidateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "config %s is valid\n", path)
-			fmt.Fprintf(cmd.OutOrStdout(), "  data:      %s\n", c.Paths.Data)
-			fmt.Fprintf(cmd.OutOrStdout(), "  instances: %s\n", c.Paths.Instances)
-			fmt.Fprintf(cmd.OutOrStdout(), "  products:  %d configured\n", len(c.Products))
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "config %s is valid\n", path)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  data:      %s\n", c.Paths.Data)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  instances: %s\n", c.Paths.Instances)
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "  products:  %d configured\n", len(c.Products))
 			return nil
 		},
 	}
