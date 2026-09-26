@@ -82,6 +82,7 @@ type Config struct {
 // gets every other path derived from it.
 func defaultsTemplated() *Config {
 	return &Config{
+		//nolint:gosec // G101: "Secrets" here is a directory path field (paths.secrets), not a credential value
 		Paths: Paths{
 			Data:      "/var/lib/dzo",
 			Instances: "${data}/instances",
