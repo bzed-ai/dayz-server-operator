@@ -112,7 +112,11 @@ jobs:
       - name: Install packaging tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends debhelper lintian
+          # build-essential (make, etc.) isn't pulled in by debhelper/lintian
+          # themselves and isn't preinstalled on a minimal runner, unlike a
+          # real Debian buildd/sbuild chroot; dpkg-checkbuilddeps still wants
+          # it present even though Debian policy lets Build-Depends omit it.
+          sudo apt-get install -y --no-install-recommends build-essential debhelper lintian
       - name: dpkg-buildpackage
         run: dpkg-buildpackage -us -uc -b
       - name: lintian
