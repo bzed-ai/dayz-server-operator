@@ -45,9 +45,9 @@ func newProductCmd() *cobra.Command {
 func newModCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "mod",
-		Short: "Workshop mod downloads (§C7)",
+		Short: "Workshop mod downloads and dependency checks (§C7)",
 	}
-	cmd.AddCommand(newModDownloadCmd())
+	cmd.AddCommand(newModDownloadCmd(), newModCfgPatchesCmd(), newModDepsCmd())
 	return cmd
 }
 

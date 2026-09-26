@@ -11,6 +11,7 @@ docs/_build/
 coverage.out
 coverage.out.raw
 coverage.html
+test-report.xml
 /debian/.debhelper/
 /debian/dzo/
 /debian/debhelper-build-stamp
