@@ -50,7 +50,7 @@ Legacy source analysed: `../dayzdockerserver` (branches `main`, `chernarus`, `li
 | D30 | RCon | **Built-in BattlEye RCon implementation in dzo**, with no external tools (`bercon-cli`, `dayz_restart`) and no external RCon library (§C8). |
 | D31 | Backups | **Built into dzo via btrfs snapshots**: instances must live on btrfs subvolumes (created unprivileged), read-only snapshots before changes (incl. automatic mod updates, with the server stopped), configurable retention with safe cleanup, full/partial restore, and an optional `post_backup` hook for offsite copies (§C20). |
 | D32 | Migration | **Fresh start, no data import.** Legacy servers are only a config source: a converter builds an **example site config** from the legacy git branches (never from volumes), which is reviewed by hand. New worlds, profiles and player data start empty (§C21). |
-| D33 | Boot test | A render is only proven good once a real `DayZServer` has booted it. **`dzo test boot`** starts the server headless on the rendered output (mission, serverDZ.cfg, keys, mods) in a disposable tree, waits for readiness, stops it and checks the logs (script compile errors, script modules not loaded, CE/mission errors). The method follows the `dayz-dev` skill (`testing/local-server.md`). Used during development and for the example configs, and optionally as a pre-flight gate before automatic updates are rolled out (§C22). |
+| D33 | Boot test | A render is only proven good once a real `DayZServer` has booted it. **`dzo test boot`** starts the server headless on the rendered output (mission, serverDZ.cfg, keys, mods) in a disposable tree, waits for readiness, stops it and checks the logs (script compile errors, script modules not loaded, CE/mission errors). The method follows the `dayz-dev` skill (`testing/local-server.md`). **Development tool only:** it runs on developer machines (or a dedicated test runner), **never on a host with live servers**, and is not part of the update or restart path (§C22). |
 
 ---
 
@@ -300,7 +300,7 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 | FR-23 | Pre-start / post-render **hooks** per instance (traderstocks, live weather, …) | pre_start.sh |
 | FR-24 | Extra per-instance container options: env (e.g. LD_PRELOAD), extra ro mounts (GeoIP, fix libs), CPU pinning/limits, params | D9 |
 | FR-25 | Development mode: render only / container idle for debugging | DEVELOPMENT/DONT_START |
-| FR-25a | **Boot test**: boot a real DayZ server headless on a render result (fresh world, test ports), check that it becomes ready and that the logs show no script, CE or mission errors, and report per check; usable during development and as an optional pre-update gate (§C22) | – |
+| FR-25a | **Boot test**: boot a real DayZ server headless on a render result (fresh world, test ports), check that it becomes ready and that the logs show no script, CE or mission errors, and report per check; **development only, never on a host with live servers** (§C22) | – |
 | FR-26 | **No data migration.** A config converter produces an **example site config** from the legacy git repositories (branches only); servers start fresh (§C21) | – |
 | FR-27 | Web admin map: live player/vehicle positions, **extensible marker layers from other mods** (§C16); direct messages, teleport, spawn items for players, repair/delete vehicles (via `dzo-admin`), with roles and an audit log | Q17 |
 | FR-28 | Integration with the existing Prometheus + Loki (gigapipe) stack: `/metrics`, collectable logs, optional OTLP traces | Q16 |
@@ -324,7 +324,7 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 * NFR-05 Library-first architecture: CLI, timers and the later web UI/API share one core.
 * NFR-06 Secrets (Steam session, RCon passwords, web users) are never in git and have 0600 permissions.
 * NFR-07 Everything observable: structured logs, job history, exit codes usable by systemd.
-* NFR-08 Testable: golden tests against the legacy renderer output, unit tests for merges and RCon, and **boot tests with a real DayZ server** for every render change that is meant to reach a server (§C22).
+* NFR-08 Testable: golden tests against the legacy renderer output, unit tests for merges and RCon, and **boot tests with a real DayZ server** on developer machines for every render change that is meant to reach a server (§C22).
 * NFR-09 Licence AGPL-3.0-or-later with an automated dependency licence check.
 * NFR-10 No cron. Only systemd timers or daemon-internal scheduling (D19).
 * NFR-11 **≥ 85 % test coverage**, enforced in CI on GitHub and GitLab (D20, D21).
@@ -617,8 +617,7 @@ Design notes:
 * **No restart storms (F3).** Three layers stop a broken config or a crash loop from flapping forever:
   1. **Pre-flight render:** every planned restart (update, config change, scheduled, manual) first runs `dzo render --dry-run` *while the
      server is still running*. If it fails, the restart is **not** performed, the server keeps running on the old state, and an alert is sent.
-     So a bad site-repo change or integration never takes a server down. For updates, an optional **boot test** of the new render
-     (`update.boot_test`, §C22) extends this check from "renders" to "boots".
+     So a bad site-repo change or integration never takes a server down. (Real boot tests are a development tool and do not run on the host, §C22.)
   2. **Failure gate for unplanned starts:** if `ExecStartPre` render fails anyway (crash restart after a bad change), dzo records the instance as
      `failed-render` with the input hash. Further start attempts with **unchanged inputs** fail immediately without work, and the unit
      reaches `failed` via the start limit. A change of inputs (a fix pushed to the site repo) or `dzo instance ack-failure <name>`
@@ -966,7 +965,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 | `dzpodman logs` | `dzo logs <name> [-f]` (journal) |
 | `dzpodman exec/run` | `dzo shell <name>` (debug container with the same mounts), `dzo exec <name> …` |
 | `dz login` | `dzo steam login [--user] [--passthrough]`, `dzo steam status` (interactive: password + Steam Guard code or app confirmation) |
-| `dz install / update / forceupdate` | `dzo product install <product>`, `dzo update check [--apply] [--force]`, `dzo update ack <name>` (release a boot-test block, §C22) |
+| `dz install / update / forceupdate` | `dzo product install <product>`, `dzo update check [--apply] [--force]` |
 | `dz add / remove / m / mi` | `dzo mod add <id> [--instance x --server]`, `dzo mod remove`, `dzo mod update [ids…]` |
 | `dz map` | `dzo mission init/update/status/rollback/reinit <name>` (pristine fetch, one-time init, in-place update, snapshots) |
 | `dz xml` | `dzo integration check <modid>` (fetch, normalise, validate, show diffs) |
@@ -978,7 +977,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 | `healthcheck` | `dzo health startup/live` (inside the container), `dzo check …` (Icinga) |
 | `DEVELOPMENT` / `DONT_START` | `dzo render <name> --dry-run --diff`, `dzo shell <name>` |
 | (new) | `dzo site pull/status/commit/validate`, `dzo notify test`, `dzo legacy convert-config --repo <checkout> --ref <branch>…` (example site config, §C21) |
-| (new) | `dzo test boot <name> [--server steam\|product:<p>] [--mods-from cache\|steam-client] [--keep-tree] [--vanilla]` (headless boot test, §C22) |
+| (new) | `dzo test boot <name> [--server steam\|<dir>] [--mods-from steam-client\|cache\|<dir>] [--native\|--container] [--keep-tree] [--vanilla]` (headless boot test, development only, §C22) |
 
 ## C11. Hooks and extensibility
 
@@ -1601,7 +1600,13 @@ Golden tests prove that the renderer produces the expected bytes. Only the game 
 engine rejects, overrides of `proto native` methods, wrong override signatures, mods whose scripts are silently not loaded, and CE files the
 engine refuses at runtime. The `dayz-dev` skill (`testing/local-server.md`, verified with the native Linux `DayZServer` 1.29) shows that a
 headless dedicated server answers these questions in under a minute, without a client or players. `dzo test boot` builds that procedure
-into dzo, so it runs the same way on a developer machine and on the host.
+into dzo.
+
+**Development only.** A real DayZ server is only started for development: on a developer machine, or on a dedicated test runner
+without game servers. It **never runs next to live servers** and is not part of the update, restart or render path on a production host.
+dzo enforces this: `dzo test boot` refuses to run on a host where dzo manages instances (instance directories configured under `paths.instances`
+or any `dzo-*` instance unit present for the user), and there is no override flag. Production safety stays with the static checks, the
+pre-flight render and the failure gates of §C5.
 
 ### What is booted
 
@@ -1618,16 +1623,17 @@ The boot test feeds the **exact output of the render pipeline** (§C6 staging, b
 
 Where the server files and mods come from:
 
-* `--server product:<p>` (default on the host): dzo's own product generation (`cache/…/<buildid>`), i.e. what production would run.
-* `--server steam` (default on developer machines without a dzo product cache): the **"DayZ Server" tool installed by the Steam client** (app 223350;
+* `--server steam` (default): the **"DayZ Server" tool installed by the Steam client** (app 223350;
   experimental 1042420). dzo locates it like the skill's `find-dayzserver.sh`: read `steamapps/libraryfolders.vdf` of every known Steam
   root (native, Debian, Flatpak, Snap, `$STEAM_ROOT`), find `appmanifest_<appid>.acf`, and trust the manifest (`installdir`, `buildid`),
   not the `"apps"` list. `StateFlags` ≠ 4 (still updating) aborts with a clear message. If the server is not installed, dzo does not install it; it prints
   the install instructions from the skill (Steam Library → Tools → "DayZ Server", or `steam steam://install/223350`).
-* `--mods-from steam-client`: mods from the client's workshop dir (`steamapps/workshop/content/221100/<id>`). A missing mod is reported with its id
+* `--server <dir>`: an existing server install, e.g. a separate steamcmd install the developer may break freely, or the pre-installed server of a test runner.
+* `--mods-from steam-client` (default with `--server steam`): mods from the client's workshop dir (`steamapps/workshop/content/221100/<id>`). A missing mod is reported with its id
   and name ("subscribe in the Steam Workshop and start the launcher once"). dzo never downloads into Steam directories.
+  `--mods-from cache` uses a local dzo development cache, `--mods-from <dir>` a directory of `@Mod` folders (e.g. a fresh `dzo-admin` build).
 * **Nothing is ever written into a Steam directory or a cache generation.** The tree is the only thing written to. It is created under
-  `paths.cache/boottest/<run>/` (same filesystem as the cache, so mission copies are reflinks), and removed afterwards unless `--keep-tree` is set.
+  `$XDG_CACHE_HOME/dzo/boottest/<run>/`, and removed afterwards unless `--keep-tree` is set.
 
 ### How it runs (rules from the skill)
 
@@ -1640,11 +1646,10 @@ Where the server files and mods come from:
 * **Stop:** SIGTERM, then SIGKILL after 15 s. After a clean shutdown (`Termination successfully completed` in the RPT) the process can hang
   forever in Steam API threads. dzo tracks the child by PID and process group. It never matches by name: the process appears as `enfMain`, not `DayZServer`.
 * Two execution modes:
-  * `--native`: runs the Linux `DayZServer` directly (developer machines, fastest).
-  * `--container` (default on the host): the **same runtime image and mount layout as the instance quadlet** (ro server root, nested mission/keys/mod mounts),
-    via `podman run --rm` with an isolated network namespace (pasta, nothing published). This also tests the production layout (S1/S2). The A2S
-    probe runs inside the container (`podman exec … dzo health startup`). A resource guard applies: `boot_test.memory_max`, low `CPUWeight`,
-    optional CPU pinning away from live servers, and **one boot test at a time per host** (lock).
+  * `--native` (default): runs the Linux `DayZServer` directly, fastest.
+  * `--container`: the **same runtime image and mount layout as the instance quadlet** (ro server root, nested mission/keys/mod mounts),
+    via `podman run --rm` with an isolated network namespace (pasta, nothing published). This also tests the production layout (S1/S2) on the
+    developer machine. The A2S probe runs inside the container (`podman exec … dzo health startup`).
 
 ### Readiness and checks
 
@@ -1667,21 +1672,19 @@ The **vanilla baseline** (the same build with no mods and the pristine vanilla m
 `cache/boottest/baseline/<product>/<buildid>.json`. `dzo test boot --vanilla` refreshes it.
 
 Output: a report per check (text + JSON, exit code 0 pass / 1 fail / 2 infrastructure problem such as a missing server install or no free port),
-the complete `profiles/` logs kept with the job (`jobs/<id>/boottest/`), a metric `dzo_boottest_last_result{instance}`, and a Discord message when run as a gate.
+and the complete `profiles/` logs copied to `--out <dir>` (default `./boottest-<instance>-<timestamp>/`).
 
 ### Where it is used
 
-* **Development (primary use):** `dzo test boot <name>` against a local site checkout, typically with `--server steam --native`, after every
+* **Development:** `dzo test boot <name>` against a local site checkout, typically with `--server steam --native`, after every
   change to integrations, overlays, merge strategies or the renderer that is meant to reach a server. `dzo integration check <modid> --boot`
   boots a single integration on top of the vanilla mission. `make boottest SITE=<dir>` boots all instances of a site config.
 * **Acceptance:** the five example site configs (§C21) must boot green in Phase 1 (together with the golden tests: golden = same bytes, boot = the game accepts them).
 * **CI:** public CI has no server files and must never hold Steam credentials, so it runs no boot tests. An optional GitLab job on a tagged
-  self-hosted runner with a pre-installed server (`DZO_BOOTTEST_SERVER_DIR`) boots the example configs. It is skipped when the runner is absent.
-* **Production gate (optional, Phase 2):** `update.boot_test: off|warn|block` per instance (default `off`, recommended `block` for `auto` mod updates).
-  After an update has downloaded new generations and the pre-flight render succeeded, and **before** the restart countdown starts, dzo boots the
-  new render in `--container` mode. With `block`, a failure skips the restart, leaves the new generation inactive (the server keeps running on the old one),
-  and alerts. The same upstream version is not retried until it changes or an admin runs `dzo update ack <name>`. With `warn`, dzo alerts and proceeds.
-  The boot test adds about 1–3 minutes before the countdown, and the update windows (§C7) account for it.
+  self-hosted runner with a pre-installed server (`DZO_BOOTTEST_SERVER_DIR`) boots the example configs. The runner is a dedicated test machine
+  with no game servers. The job is skipped when the runner is absent.
+* **Not on production hosts:** no boot test before updates or restarts. A mod update that breaks scripts is caught by the health checks and the
+  restart-storm protection (§C5), and rolled back via generation pins (§C7). Changes made by hand (integrations, overlays) are boot-tested on a developer machine before they are pushed to the site repo.
 
 ---
 
@@ -1717,7 +1720,7 @@ internal/
   schedule/                 one-off/recurring restarts and broadcasts, transient systemd timers
   web/ (phase 3)            handlers, templates, static (embedded)
   legacy/                   config converter: legacy git branches → example site config + report (no volumes)
-  boottest/                 disposable server tree, Steam install locator (libraryfolders.vdf/appmanifest), process/container runner, log checks + pattern catalogue, baseline cache
+  boottest/                 (development only) disposable server tree, Steam install locator (libraryfolders.vdf/appmanifest), process/container runner, log checks + pattern catalogue, baseline cache, refuses to run on hosts with instances
 images/runtime/Containerfile, images/steamcmd/Containerfile
 debian/                     Debian packaging (§C14)
 contrib/icinga2/            CheckCommand definitions + examples
@@ -1766,12 +1769,12 @@ Each phase ends with a working, deployable state.
   and the **in-place apply with manifest/drift/snapshots**, serverDZ.cfg and BE handling, quadlet generation with
   **working health checks**, start/stop/restart/status/logs, **built-in RCon client** (§C8) + graceful restart.
 * Minimal `dzo-exporter` (`/metrics`, `/status`) + `dzo check remote`, so the instance can be monitored from day one.
-* `dzo test boot` (§C22, native + container mode, vanilla baseline, log checks) so every render change is boot-tested from the start.
+* `dzo test boot` (§C22, development only: native + container mode, vanilla baseline, log checks) so every render change is boot-tested on a developer machine from the start.
 * Acceptance: golden tests **and boot tests** are green for all five configs; one instance (suggest **hashima**, smallest) runs
   in parallel to production on other ports with a **copy** of its mission; kill/hang tests prove health → restart works.
 
 ### Phase 2 — Automation, monitoring, packaging, migration
-* Update engine with policies and timers (hourly check), optional boot-test gate before rollout (`update.boot_test`, §C22), per-instance maintenance restart timers, GC, rollback pins,
+* Update engine with policies and timers (hourly check), per-instance maintenance restart timers, GC, rollback pins,
   log rotation/crash summary, **btrfs snapshot backups incl. before automatic mod updates, retention/cleanup, restore (§C20)**, hooks (+ traderstocks/weather as hooks).
 * `dzo-exporter` complete (`/metrics`, `/status`, auth/TLS), remote Icinga checks + shipped CheckCommands; Discord notifications (default + per-server webhooks).
 * Debian package (§C14) built in both CIs as an artifact, and `dzo setup`.
@@ -1843,8 +1846,8 @@ Each phase ends with a working, deployable state.
 * R8 A mod or the game rewrites a file that ships in the mission repo, so every render produces "drift" and overwrites runtime data. Mitigations: drift is always backed up + notified, recurring drift on the same file suggests adding it to `mission.unmanaged`, and the example config seeds `unmanaged` from the S2 inventory.
 * R9 **btrfs is required** for instance data. Hosts without btrfs need a btrfs data volume (partition/LV, or loopback image as a stop-gap). Unprivileged snapshot deletion without `user_subvol_rm_allowed` is slow for big trees. Mitigation: `dzo setup` checks and recommends the mount option, and the deletion fallback is tested in CI.
 * R10 **Boot tests give false confidence or cost too much.** A headless boot cannot cover player-driven code (actions, inventory, damage), real
-  clients, networking or BattlEye, and some errors only appear under load or after hours. Reports say what was *not* covered. On the host, a boot
-  test needs RAM and CPU next to live servers. Mitigations: off by default as a gate, a memory limit, low CPU weight, one at a time, and only before update rollouts.
+  clients, networking or BattlEye, and some errors only appear under load or after hours. Reports say what was *not* covered. Automatic mod updates
+  on production are not boot-tested, because a real server never runs next to live servers. There, the health checks, restart-storm protection and generation rollback remain the safety net.
 
 **Assumptions**
 
