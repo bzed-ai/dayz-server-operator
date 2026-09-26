@@ -1,0 +1,11 @@
+version = 1
+SPDX-PackageName = "dayz-server-operator"
+SPDX-PackageSupplier = "Bernd Zeimetz <bernd@bzed.de>"
+SPDX-PackageDownloadLocation = "https://github.com/bzed-ai/dayz-server-operator"
+
+# go.sum is a machine-generated, strictly-formatted checksum lockfile: it
+# cannot carry a comment header without breaking `go mod verify`.
+[[annotations]]
+path = "go.sum"
+SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
+SPDX-License-Identifier = "AGPL-3.0-or-later"

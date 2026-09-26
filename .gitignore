@@ -2,3 +2,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 docs/_build/
+/dist/
+/bin/
+/vendor/
+*.deb
+*.buildinfo
+*.changes
+coverage.out
+coverage.html

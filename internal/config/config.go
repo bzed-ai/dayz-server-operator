@@ -1,0 +1,223 @@
+// SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+// Package config loads and validates dzo's operator configuration
+// (/etc/dzo/config.yaml, §C2 of the implementation plan): data paths, the
+// site config repo remote, server products and default notification
+// targets. It never touches per-instance configuration, which lives in the
+// site repo (§C3) and is out of scope for this package.
+package config
+
+import (
+	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Paths holds every on-disk location dzo manages. All fields are directories.
+// Values may reference "${data}" to inherit Data's resolved value (§C2).
+type Paths struct {
+	Data      string `yaml:"data"`
+	Instances string `yaml:"instances"`
+	Snapshots string `yaml:"snapshots"`
+	Cache     string `yaml:"cache"`
+	Secrets   string `yaml:"secrets"`
+	DB        string `yaml:"db"`
+}
+
+// Site describes the site config repo (D16): shared mod integrations and
+// per-instance configuration, checked out from a configurable git remote.
+type Site struct {
+	// Remote is the git URL of the site repo. Empty means "not configured
+	// yet" - dzo can still run setup/diagnostic commands without it.
+	Remote string `yaml:"remote"`
+	Branch string `yaml:"branch"`
+	// DeployKeyPath is an optional path (normally under paths.secrets) to
+	// an SSH private key used to fetch/push the site repo.
+	DeployKeyPath string `yaml:"deploy_key_path"`
+	// AutoPush controls whether dzo-initiated commits (mod add, web edits)
+	// are pushed back automatically, or only committed locally.
+	AutoPush bool `yaml:"auto_push"`
+}
+
+// Product describes one server "product" dzo can install (D14): the Steam
+// app id of the dedicated server and the Steam Workshop app id its mods are
+// downloaded through.
+type Product struct {
+	AppID         uint32 `yaml:"app_id"`
+	WorkshopAppID uint32 `yaml:"workshop_app_id"`
+	// BetaBranch selects a non-default steamcmd beta branch (e.g. for
+	// experimental builds distributed as a beta of the same app id).
+	BetaBranch string `yaml:"beta_branch,omitempty"`
+}
+
+// DiscordWebhook is one named Discord notification target (§C9).
+type DiscordWebhook struct {
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
+}
+
+// Notify holds default notification targets. Per-instance config in the
+// site repo can select a subset of these by name, or none.
+type Notify struct {
+	Discord []DiscordWebhook `yaml:"discord"`
+}
+
+// Config is the root of /etc/dzo/config.yaml.
+type Config struct {
+	Paths    Paths              `yaml:"paths"`
+	Site     Site               `yaml:"site"`
+	Products map[string]Product `yaml:"products"`
+	Notify   Notify             `yaml:"notify"`
+}
+
+// defaultsTemplated returns the configuration documented in §C2 with its
+// path fields still holding "${data}" references, before any file is read
+// and before those references are resolved against Paths.Data. It is the
+// unmarshal target for Parse, so a user overriding only paths.data still
+// gets every other path derived from it.
+func defaultsTemplated() *Config {
+	return &Config{
+		Paths: Paths{
+			Data:      "/var/lib/dzo",
+			Instances: "${data}/instances",
+			Snapshots: "${data}/snapshots",
+			Cache:     "${data}/cache",
+			Secrets:   "${data}/secrets",
+			DB:        "${data}/db",
+		},
+		Products: map[string]Product{
+			"dayz-stable": {
+				AppID:         223350,
+				WorkshopAppID: 221100,
+			},
+			"dayz-experimental": {
+				AppID:         1042420,
+				WorkshopAppID: 221100,
+			},
+		},
+	}
+}
+
+// Default returns the configuration documented in §C2, before any file is
+// read: paths.data = /var/lib/dzo, the rest derived from it, and the two
+// DayZ products from D14. Site and Notify start empty - they have no
+// meaningful default. The returned config has already resolved its paths,
+// so it validates and can be used as-is.
+func Default() *Config {
+	c := defaultsTemplated()
+	c.resolvePaths()
+	return c
+}
+
+// Load reads, defaults, resolves and validates the config file at path.
+func Load(path string) (*Config, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("config: read %s: %w", path, err)
+	}
+	return Parse(data)
+}
+
+// Parse defaults, resolves and validates raw YAML config bytes. It is the
+// core of Load, split out so tests and callers that already have the bytes
+// (e.g. from a site repo checkout) don't need a real file.
+func Parse(data []byte) (*Config, error) {
+	c := defaultsTemplated()
+	if err := yaml.Unmarshal(data, c); err != nil {
+		return nil, fmt.Errorf("config: parse: %w", err)
+	}
+
+	c.resolvePaths()
+
+	if err := c.Validate(); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// resolvePaths expands "${data}" references in every Paths field against
+// the (already-set) Data field. Only Data itself is treated as final; every
+// other field is templated exactly once.
+func (c *Config) resolvePaths() {
+	const token = "${data}"
+	expand := func(s string) string {
+		return strings.ReplaceAll(s, token, c.Paths.Data)
+	}
+	c.Paths.Instances = expand(c.Paths.Instances)
+	c.Paths.Snapshots = expand(c.Paths.Snapshots)
+	c.Paths.Cache = expand(c.Paths.Cache)
+	c.Paths.Secrets = expand(c.Paths.Secrets)
+	c.Paths.DB = expand(c.Paths.DB)
+}
+
+// Validate checks the invariants the rest of dzo relies on: every path is
+// absolute and set, site.remote (when set) parses as a URL, and every
+// product has a non-zero app id. It does not touch the filesystem - that is
+// "dzo setup"'s job (btrfs checks, ownership, free space).
+func (c *Config) Validate() error {
+	var errs []string
+
+	pathFields := map[string]string{
+		"paths.data":      c.Paths.Data,
+		"paths.instances": c.Paths.Instances,
+		"paths.snapshots": c.Paths.Snapshots,
+		"paths.cache":     c.Paths.Cache,
+		"paths.secrets":   c.Paths.Secrets,
+		"paths.db":        c.Paths.DB,
+	}
+	for name, p := range pathFields {
+		if p == "" {
+			errs = append(errs, fmt.Sprintf("%s: must not be empty", name))
+			continue
+		}
+		if !filepath.IsAbs(p) {
+			errs = append(errs, fmt.Sprintf("%s: %q is not an absolute path", name, p))
+		}
+	}
+
+	if c.Site.Remote != "" {
+		if _, err := url.Parse(c.Site.Remote); err != nil {
+			errs = append(errs, fmt.Sprintf("site.remote: %q is not a valid URL: %v", c.Site.Remote, err))
+		}
+	}
+	if c.Site.Remote != "" && c.Site.Branch == "" {
+		errs = append(errs, "site.branch: required when site.remote is set")
+	}
+
+	if len(c.Products) == 0 {
+		errs = append(errs, "products: at least one product must be configured")
+	}
+	for name, p := range c.Products {
+		if p.AppID == 0 {
+			errs = append(errs, fmt.Sprintf("products.%s.app_id: must be set", name))
+		}
+		if p.WorkshopAppID == 0 {
+			errs = append(errs, fmt.Sprintf("products.%s.workshop_app_id: must be set", name))
+		}
+	}
+
+	seen := map[string]bool{}
+	for _, w := range c.Notify.Discord {
+		if w.Name == "" {
+			errs = append(errs, "notify.discord: entry with empty name")
+			continue
+		}
+		if seen[w.Name] {
+			errs = append(errs, fmt.Sprintf("notify.discord: duplicate name %q", w.Name))
+		}
+		seen[w.Name] = true
+		if w.URL == "" {
+			errs = append(errs, fmt.Sprintf("notify.discord.%s: url must be set", w.Name))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("config: invalid configuration:\n  - %s", strings.Join(errs, "\n  - "))
+	}
+	return nil
+}

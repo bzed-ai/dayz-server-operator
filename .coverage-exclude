@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# Files excluded from the 85% statement coverage gate (D20).
+# Only generated code belongs here, listed file by file - never whole packages
+# by convention, so exclusions stay visible and reviewable.
+#
+# cmd/dzo/main.go is trivial wiring (delegates to cmd.Execute) and is kept
+# thin on purpose so it does not dilute the coverage number (C15).
+cmd/dzo/main.go

@@ -1,0 +1,101 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+MODULE      := github.com/bzed-ai/dayz-server-operator
+BINARY      := dzo
+CMD         := ./cmd/dzo
+BIN_DIR     := bin
+DIST_DIR    := dist
+
+VERSION     := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+COMMIT      := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+DATE        := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+
+LDFLAGS     := -s -w \
+	-X '$(MODULE)/internal/version.Version=$(VERSION)' \
+	-X '$(MODULE)/internal/version.Commit=$(COMMIT)' \
+	-X '$(MODULE)/internal/version.Date=$(DATE)'
+
+COVERAGE_MIN := 85
+GO           ?= go
+
+.PHONY: all build build-static test test-race cover cover-html lint vet fmt fmt-check \
+        licenses reuse deb clean tidy generate
+
+all: lint reuse test build
+
+## build: compile the dzo binary for the host platform (static, CGO disabled).
+build:
+	mkdir -p $(BIN_DIR)
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY) $(CMD)
+
+## build-static: cross-compile static release binaries used by CI / packaging.
+build-static:
+	mkdir -p $(DIST_DIR)
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(BINARY)-linux-amd64 $(CMD)
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(DIST_DIR)/$(BINARY)-linux-arm64 $(CMD)
+
+## test: run the unit test suite.
+test:
+	$(GO) test ./... -covermode=atomic -coverprofile=coverage.out.raw
+	@./scripts/filter-coverage.sh coverage.out.raw coverage.out
+
+## test-race: run tests with the race detector (used in CI).
+test-race:
+	$(GO) test ./... -race -covermode=atomic -coverprofile=coverage.out.raw
+	@./scripts/filter-coverage.sh coverage.out.raw coverage.out
+
+## cover: run tests and print the total coverage percentage, failing below COVERAGE_MIN.
+cover: test
+	@$(GO) tool cover -func=coverage.out | tail -1
+	@pct=$$($(GO) tool cover -func=coverage.out | tail -1 | grep -oE '[0-9]+\.[0-9]+'); \
+	echo "total coverage: $$pct% (minimum: $(COVERAGE_MIN)%)"; \
+	awk -v p="$$pct" -v m="$(COVERAGE_MIN)" 'BEGIN { exit !(p+0 >= m+0) }' \
+		|| { echo "coverage $$pct% is below the required $(COVERAGE_MIN)%"; exit 1; }
+
+## cover-html: render an HTML coverage report at coverage.html.
+cover-html: test
+	$(GO) tool cover -html=coverage.out -o coverage.html
+
+## lint: run golangci-lint (installed separately, see .golangci.yml).
+lint:
+	golangci-lint run ./...
+
+## reuse: check REUSE/SPDX licence compliance (`pip install reuse`, or the
+## Debian `reuse` package at runtime/CI time), D15/NFR-09.
+reuse:
+	reuse lint
+
+## vet: run go vet.
+vet:
+	$(GO) vet ./...
+
+## fmt: gofmt all Go sources in place.
+fmt:
+	gofmt -l -w .
+
+## fmt-check: fail if any file is not gofmt-formatted.
+fmt-check:
+	@unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then \
+		echo "the following files are not gofmt-formatted:"; \
+		echo "$$unformatted"; \
+		exit 1; \
+	fi
+
+## licenses: check dependency licences against the AGPL-compatible allow-list (D15).
+licenses:
+	go-licenses check ./... --allowed_licenses="MIT,BSD-2-Clause,BSD-3-Clause,Apache-2.0,ISC,0BSD"
+
+## deb: build the Debian package (requires debhelper, dpkg-dev; see debian/).
+deb:
+	dpkg-buildpackage -us -uc -b
+
+## tidy: tidy go.mod/go.sum.
+tidy:
+	$(GO) mod tidy
+
+## clean: remove build artifacts.
+clean:
+	rm -rf $(BIN_DIR) $(DIST_DIR) coverage.out coverage.out.raw coverage.html
+	rm -rf ../*.deb ../*.buildinfo ../*.changes
