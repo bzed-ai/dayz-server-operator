@@ -9,6 +9,34 @@ import (
 	"time"
 )
 
+func TestRenderContainerRestartLimit(t *testing.T) {
+	spec := ContainerSpec{
+		Name: "dzo-deerisle", Image: "localhost/dzo-runtime:latest", Network: NetworkHost,
+		RestartLimitBurst: 5, RestartLimitInterval: 30 * time.Minute,
+	}
+	out, err := RenderContainer(spec)
+	if err != nil {
+		t.Fatalf("RenderContainer: %v", err)
+	}
+	if !strings.Contains(out, "StartLimitBurst=5") {
+		t.Errorf("output missing StartLimitBurst: %s", out)
+	}
+	if !strings.Contains(out, "StartLimitIntervalSec=30m") {
+		t.Errorf("output missing StartLimitIntervalSec: %s", out)
+	}
+}
+
+func TestRenderContainerOmitsRestartLimitWhenZero(t *testing.T) {
+	spec := ContainerSpec{Name: "dzo-deerisle", Image: "localhost/dzo-runtime:latest", Network: NetworkHost}
+	out, err := RenderContainer(spec)
+	if err != nil {
+		t.Fatalf("RenderContainer: %v", err)
+	}
+	if strings.Contains(out, "StartLimit") {
+		t.Errorf("output should omit StartLimit* when unset: %s", out)
+	}
+}
+
 func TestRenderContainerHostNetwork(t *testing.T) {
 	spec := ContainerSpec{
 		Name:        "dzo-deerisle",

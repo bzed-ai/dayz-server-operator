@@ -69,6 +69,15 @@ type ContainerSpec struct {
 	CPUs   string // e.g. "4"; empty omits CPUs
 
 	StopTimeout time.Duration // 0 omits ContainerStopTimeout
+
+	// RestartLimitBurst/RestartLimitInterval configure systemd's own
+	// start-rate limiting (StartLimitBurst=/StartLimitIntervalSec=, in the
+	// [Unit] section) - one of F3's three restart-storm-protection layers
+	// (§C5): a crash loop or repeated health-check kill lands the unit in
+	// "failed" once this limit is hit, rather than flapping forever. Zero
+	// values omit both keys, leaving systemd's own defaults in effect.
+	RestartLimitBurst    int
+	RestartLimitInterval time.Duration
 }
 
 // Validate checks the invariants RenderContainer relies on.
@@ -102,6 +111,12 @@ func RenderContainer(spec ContainerSpec) (string, error) {
 	writeSection(&b, "Unit", func(kv *kvWriter) {
 		if spec.Description != "" {
 			kv.set("Description", spec.Description)
+		}
+		if spec.RestartLimitBurst > 0 {
+			kv.set("StartLimitBurst", strconv.Itoa(spec.RestartLimitBurst))
+		}
+		if spec.RestartLimitInterval > 0 {
+			kv.set("StartLimitIntervalSec", formatDuration(spec.RestartLimitInterval))
 		}
 	})
 

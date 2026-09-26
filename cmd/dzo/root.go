@@ -39,6 +39,7 @@ func newRootCmd() *cobra.Command {
 		newSteamCmd(),
 		newProductCmd(),
 		newModCmd(),
+		newInstanceCmd(),
 	)
 	return root
 }
