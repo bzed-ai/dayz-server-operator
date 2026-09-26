@@ -4,10 +4,19 @@
 // Command dzo is the dayz-server-operator CLI.
 package main
 
-import "os"
+import (
+	"errors"
+	"os"
+)
 
 func main() {
-	if err := newRootCmd().Execute(); err != nil {
-		os.Exit(1)
+	err := newRootCmd().Execute()
+	if err == nil {
+		return
 	}
+	var exitErr *checkExitErr
+	if errors.As(err, &exitErr) {
+		os.Exit(exitErr.code)
+	}
+	os.Exit(1)
 }
