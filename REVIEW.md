@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
 # Review of IMPLEMENTATION_PLAN.md
 
 Date: 2026-09-26 · Reviewer: Crush (GLM) · Reviewed revision: `main`, working tree

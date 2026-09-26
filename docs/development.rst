@@ -1,3 +1,6 @@
+.. SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+.. SPDX-License-Identifier: AGPL-3.0-or-later
+
 Development
 ===========
 
@@ -28,7 +31,7 @@ Modules are vendored, so builds work offline.
 
    make build      # static binary
    make test       # tests with race detector and coverage gate
-   make lint
+   make lint       # includes reuse lint (licence headers)
    make licenses   # dependency licences must be AGPL-compatible
    make docs       # this documentation (needs python3-sphinx)
    make deb        # Debian package
@@ -82,3 +85,16 @@ Contributing
   matching page here.
 * The documentation is plain reStructuredText in ``docs/``, built with Sphinx.
   ``make docs`` must build without warnings.
+* dzo is licensed under the AGPL-3.0-or-later. The repository follows the
+  `REUSE <https://reuse.software/>`_ specification: every new file starts with
+  SPDX headers in the file's comment syntax, for example in Go:
+
+  .. code-block:: go
+
+     // SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+     // SPDX-License-Identifier: AGPL-3.0-or-later
+
+  Files that cannot carry comments (images, test fixtures) get a
+  ``<file>.license`` file next to them or an entry in ``REUSE.toml``.
+  ``make lint`` runs ``reuse lint`` and fails on files without licence
+  information.

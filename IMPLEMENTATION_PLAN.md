@@ -1,3 +1,8 @@
+<!--
+SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+SPDX-License-Identifier: AGPL-3.0-or-later
+-->
+
 # dayz-server-operator — Implementation Plan
 
 Status: **planning** (no code yet) · Last update: 2026-09-26
@@ -32,7 +37,7 @@ Legacy source analysed: `../dayzdockerserver` (branches `main`, `chernarus`, `li
 | D12 | Implementation language | **Go** (see §C1). The user suggested Python and left the choice open once Go libraries were raised. |
 | D13 | Mission directory | **The live mission dir (`mpmissions/<map>`) is persistent game data and is NEVER wiped or recreated.** It is initialised once from the instance's pristine mission (`servermpmissions`, per-instance, usually from a git repo). Afterwards the operator only *updates files in place*: it copies from pristine, merges and writes generated files. See §C6. |
 | D14 | Server products | Several server "products" side by side: **DayZ stable (223350) and DayZ experimental (1042420)** now, extensible to future products (e.g. a DayZ successor). Pristine missions are per instance anyway. |
-| D15 | Licence | **AGPL-3.0-or-later** if every dependency is compatible (checked so far: Apache-2.0, MIT, BSD are compatible; RCon is our own code). Otherwise GPL-3.0; MIT as the last resort. A licence check is enforced in CI. |
+| D15 | Licence | **AGPL-3.0-or-later** if every dependency is compatible (checked so far: Apache-2.0, MIT, BSD are compatible; RCon is our own code). Otherwise GPL-3.0; MIT as the last resort. A licence check is enforced in CI. Copyright **Bernd Zeimetz <bernd@bzed.de>**. The repository follows the **REUSE** specification: every file carries `SPDX-FileCopyrightText` and `SPDX-License-Identifier` headers (files that cannot hold comments, such as images or fixtures, are covered by a `.license` file next to them or by `REUSE.toml`), licence texts live in `LICENSES/`, and `reuse lint` in CI fails on any file without licence information. |
 | D16 | Site repo | Repo name/location free. The **git remote is configurable by URL**, and pull/commit/push behaviour is configurable. |
 | D17 | Naming and packaging | Binary **`dzo`**, service user **`dayz`**. Delivered as a **Debian package**. |
 | D18 | Monitoring | **Discord** notifications, plus **Icinga**-compatible checks for every instance. **Container health checks are mandatory and must work** (startup + liveness). |
@@ -331,7 +336,7 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 * NFR-06 Secrets (Steam session, RCon passwords, web users) are never in git and have 0600 permissions.
 * NFR-07 Everything observable: structured logs, job history, exit codes usable by systemd.
 * NFR-08 Testable: golden tests against the legacy renderer output, unit tests for merges and RCon, and **boot tests with a real DayZ server** on developer machines for every render change that is meant to reach a server (§C22).
-* NFR-09 Licence AGPL-3.0-or-later with an automated dependency licence check.
+* NFR-09 Licence AGPL-3.0-or-later, copyright Bernd Zeimetz, with an automated dependency licence check (`go-licenses`) and REUSE compliance of our own files (`reuse lint`): every new file gets SPDX headers when it is created.
 * NFR-10 No cron. Only systemd timers or daemon-internal scheduling (D19).
 * NFR-11 **≥ 85 % test coverage**, enforced in CI on GitHub and GitLab (D20, D21).
 * NFR-12 Remote-monitorable: Prometheus metrics + a machine-readable status endpoint; no local agent required (D22).
@@ -1097,8 +1102,8 @@ single-admin setup behind a VPN) and is shown as a warning on the dashboard and 
 
 * Source package `dayz-server-operator` with a proper `debian/` directory, targeting **trixie**: plain `dh` with `override_dh_auto_build`/`_test`
   calling the Makefile (no `dh-golang`, because that ties the build to Debian's Go). The build uses the **upstream Go toolchain** (§C0) found via `GO`/`PATH`
-  in the builder, Go modules are **vendored** (`go mod vendor`, so builds work offline), and the result is a `CGO_ENABLED=0` static binary. `debian/copyright` is generated/checked
-  against the vendored licences (feeds into the AGPL compatibility check).
+  in the builder, Go modules are **vendored** (`go mod vendor`, so builds work offline), and the result is a `CGO_ENABLED=0` static binary. `debian/copyright` (machine-readable DEP-5) is generated/checked
+  against the vendored licences (feeds into the AGPL compatibility check); our own files are `Copyright: 2026 Bernd Zeimetz <bernd@bzed.de>`, `License: AGPL-3.0-or-later`, matching the SPDX headers.
 * Binary package `dzo` ships:
   * `/usr/bin/dzo` (static; also bind-mounted into containers for health checks)
   * `/usr/share/dzo/images/{runtime,steamcmd}/Containerfile`, quadlet templates, default presets
@@ -1141,7 +1146,7 @@ program that answers A2S and writes recorded log fixtures from S9), so its own c
 
 CI (identical logic, two front-ends):
 
-* `Makefile` targets: `lint` (golangci-lint, `go vet`), `test` (race, coverage, gate), `fuzz-short`, `golden`, `licenses`, `docs` (`sphinx-build -W`, warnings fail the build)
+* `Makefile` targets: `lint` (golangci-lint, `go vet`, `reuse lint` from the trixie `reuse` package), `test` (race, coverage, gate), `fuzz-short`, `golden`, `licenses`, `docs` (`sphinx-build -W`, warnings fail the build)
   (`go-licenses check` against the AGPL-compatible allow-list), `build` (static, `-trimpath`, version stamping), `deb`, `integration`.
 * **`.github/workflows/ci.yml`**: jobs lint → test(+coverage gate, upload coverage report) → licenses → build → deb (artifact)
   → integration-podman. Tags create a GitHub release with the binary + `.deb`.
@@ -1837,10 +1842,11 @@ contrib/backup-hooks/       example post_backup hooks: restic, borg
 .github/workflows/, .gitlab-ci.yml   CI (§C15)
 testdata/golden/…           legacy renderer outputs (see E)
 docs/                       Sphinx documentation website (reST, `make docs`), served under /docs/ (D36)
-LICENSE                     AGPL-3.0-or-later
+LICENSE                     symlink to LICENSES/AGPL-3.0-or-later.txt
+LICENSES/                   licence texts (REUSE); every file has SPDX headers
 ```
 
-Tooling: latest upstream Go (go1.27.x, pinned via the `toolchain` directive; not trixie's golang-go), `golangci-lint`, `go-licenses`,
+Tooling: latest upstream Go (go1.27.x, pinned via the `toolchain` directive; not trixie's golang-go), `golangci-lint`, `go-licenses`, `reuse`,
 `make test` (coverage gate 85 %), golden tests, `make deb`. CI on GitHub Actions and GitLab from the first commit (§C15).
 The `dzo-admin` servermod lives in a separate repository.
 
@@ -1875,7 +1881,7 @@ Each phase ends with a working, deployable state.
   real satellite tiles (not the 172-byte server placeholders). If it doesn't work, vanilla maps also use manual upload.
 
 ### Phase 1 — Core + CLI, single instance parity
-* Repo bootstrap: licence, Makefile, CI on GitHub + GitLab with the 85 % coverage gate and licence check active from day one. The documentation site (`docs/`, D36) is built in CI from day one, and every feature lands together with its documentation page.
+* Repo bootstrap: licence (REUSE-compliant from the first commit), Makefile, CI on GitHub + GitLab with the 85 % coverage gate and licence check active from day one. The documentation site (`docs/`, D36) is built in CI from day one, and every feature lands together with its documentation page.
 * Config/products/site repo (remote URL), `dzo steam login`, product install/update into generations,
   mod add/update into generations, pristine missions from git + one-time init, render pipeline with all merge strategies
   and the **in-place apply with manifest/drift/snapshots**, serverDZ.cfg and BE handling, quadlet generation with

@@ -1,9 +1,12 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 # Sphinx configuration for the dzo documentation.
 # Only Sphinx itself (python3-sphinx) is needed; no extensions, built-in theme.
 
 project = "dzo"
-copyright = "dayz-server-operator contributors"
-author = "dayz-server-operator contributors"
+copyright = "2026 Bernd Zeimetz"
+author = "Bernd Zeimetz"
 release = "0.0"
 
 extensions = []
