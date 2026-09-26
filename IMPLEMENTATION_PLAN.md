@@ -52,6 +52,8 @@ Legacy source analysed: `../dayzdockerserver` (branches `main`, `chernarus`, `li
 | D32 | Migration | **Fresh start, no data import.** Legacy servers are only a config source: a converter builds an **example site config** from the legacy git branches (never from volumes), which is reviewed by hand. New worlds, profiles and player data start empty (§C21). |
 | D33 | Boot test | A render is only proven good once a real `DayZServer` has booted it. **`dzo test boot`** starts the server headless on the rendered output (mission, serverDZ.cfg, keys, mods) in a disposable tree, waits for readiness, stops it and checks the logs (script compile errors, script modules not loaded, CE/mission errors). The method follows the `dayz-dev` skill (`testing/local-server.md`). **Development tool only:** it runs on developer machines (or a dedicated test runner), **never on a host with live servers**, and is not part of the update or restart path (§C22). |
 | D34 | Web authentication | **Password + TOTP MFA required by default** for every web user (enrolment is forced at first login, no skip). Local users with argon2id, one-time recovery codes, server-side sessions, step-up re-authentication for sensitive actions, lockout protection. OIDC is optional and must prove MFA, or local TOTP is required on top. No default passwords: the first admin is created with the CLI via a one-time enrolment link (§C12). |
+| D35 | Engineering style | **Lazy engineering** (in the spirit of the `ponytail` skill): build only what is needed now, reuse before writing (existing dzo code → Go stdlib → platform features such as systemd/podman/btrfs/the DB → existing well-maintained libraries → new code), no speculative abstractions, options or scaffolding, boring over clever. Never lazy about validation at trust boundaries, data-loss prevention, security or tests. Deliberate shortcuts with a known ceiling are marked `ponytail:` in the code. **This plan describes the target picture. Each phase implements only what it needs, and anything not needed yet is deferred rather than pre-built.** |
+| D36 | Documentation | User/admin documentation as a **static website built with Sphinx** (reStructuredText, built-in theme, no extensions; `python3-sphinx` from trixie) in `docs/`. It is **independent of this plan** (describes dzo, never references the plan), is built in CI with warnings as errors, is shipped in the package under `/usr/share/doc/dzo/html/`, and is **served by the web UI under `/docs/`** as static files, without login. |
 
 ---
 
@@ -333,6 +335,8 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 * NFR-10 No cron. Only systemd timers or daemon-internal scheduling (D19).
 * NFR-11 **≥ 85 % test coverage**, enforced in CI on GitHub and GitLab (D20, D21).
 * NFR-12 Remote-monitorable: Prometheus metrics + a machine-readable status endpoint; no local agent required (D22).
+* NFR-13 **Lazy engineering (D35):** existing libraries and platform features first, no over-engineering, implement only what is needed; security, data safety and tests are never cut.
+* NFR-14 **Documentation (D36):** a Sphinx website in `docs/`, kept in step with the code (behaviour changes update the docs in the same change), served by the web UI under `/docs/`.
 
 ---
 
@@ -1023,6 +1027,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
   **schedules (restarts, broadcasts)**, mod search (Steam Web API), jobs, **backups (list, diff, browse, pin, restore)**, audit log, and later an XML/JSON editor with `dzce`
   validation (the legacy XmlTree idea).
 * JSON API `/api/v1/…` over the same service layer (Discord bots, scripts). Every UI action is an API call.
+* **Documentation** (D36): `/docs/` serves the installed Sphinx HTML (`/usr/share/doc/dzo/html/`, overridable with `web.docs_dir` for dev builds) with a plain `http.FileServer`, public (no login; it contains nothing secret), linked from the UI header and the login page (so account recovery instructions are reachable when locked out).
 * Auth: see **Authentication** below (password + TOTP by default). **RBAC scoped per server**: roles
   `admin` / `moderator` / `operator` / `viewer`, assignable globally or per instance (e.g. a moderator may kick/ban on deerisle only).
   Fine-grained permissions under the roles (`player.kick`, `player.ban`, `player.ban.global`, `player.spawn_item`, `player.teleport`,
@@ -1104,6 +1109,7 @@ single-admin setup behind a VPN) and is shown as a warning on the dashboard and 
 * `postinst`: allocate **subuid/subgid** ranges for `dayz` (sysusers does not do this; needed for rootless podman),
   `loginctl enable-linger dayz`, and **no** automatic start of game servers. `dzo setup` (run as `dayz`) does the
   first-time steps: image builds, steam login, site repo clone.
+* Documentation: `Build-Depends: python3-sphinx`, `make docs` in `override_dh_auto_build`, installed to `/usr/share/doc/dzo/html/`, and `dh_sphinxdoc` links Sphinx's JS/CSS to the Debian packages (`libjs-sphinxdoc`) instead of duplicating it.
 * Depends: `podman (>= 5.4)`, `systemd (>= 257)`, `git`, `uidmap`, `passt`, `libjs-htmx`, `libjs-leaflet`. Recommends: `geoipupdate`, `btrfs-progs` (admin tooling; dzo uses the ioctls directly),
   `python3`, `python3-requests` (for hooks). Suggests: `postgresql`, `monitoring-plugins-basic`. All are available in trixie.
 * Upgrades: `postinst` triggers `dzo quadlet regenerate` for the `dayz` user (via `systemctl --user -M dayz@`) so
@@ -1135,7 +1141,7 @@ program that answers A2S and writes recorded log fixtures from S9), so its own c
 
 CI (identical logic, two front-ends):
 
-* `Makefile` targets: `lint` (golangci-lint, `go vet`), `test` (race, coverage, gate), `fuzz-short`, `golden`, `licenses`
+* `Makefile` targets: `lint` (golangci-lint, `go vet`), `test` (race, coverage, gate), `fuzz-short`, `golden`, `licenses`, `docs` (`sphinx-build -W`, warnings fail the build)
   (`go-licenses check` against the AGPL-compatible allow-list), `build` (static, `-trimpath`, version stamping), `deb`, `integration`.
 * **`.github/workflows/ci.yml`**: jobs lint → test(+coverage gate, upload coverage report) → licenses → build → deb (artifact)
   → integration-podman. Tags create a GitHub release with the binary + `.deb`.
@@ -1830,7 +1836,7 @@ contrib/icinga2/            CheckCommand definitions + examples
 contrib/backup-hooks/       example post_backup hooks: restic, borg
 .github/workflows/, .gitlab-ci.yml   CI (§C15)
 testdata/golden/…           legacy renderer outputs (see E)
-docs/
+docs/                       Sphinx documentation website (reST, `make docs`), served under /docs/ (D36)
 LICENSE                     AGPL-3.0-or-later
 ```
 
@@ -1869,7 +1875,7 @@ Each phase ends with a working, deployable state.
   real satellite tiles (not the 172-byte server placeholders). If it doesn't work, vanilla maps also use manual upload.
 
 ### Phase 1 — Core + CLI, single instance parity
-* Repo bootstrap: licence, Makefile, CI on GitHub + GitLab with the 85 % coverage gate and licence check active from day one.
+* Repo bootstrap: licence, Makefile, CI on GitHub + GitLab with the 85 % coverage gate and licence check active from day one. The documentation site (`docs/`, D36) is built in CI from day one, and every feature lands together with its documentation page.
 * Config/products/site repo (remote URL), `dzo steam login`, product install/update into generations,
   mod add/update into generations, pristine missions from git + one-time init, render pipeline with all merge strategies
   and the **in-place apply with manifest/drift/snapshots**, serverDZ.cfg and BE handling, quadlet generation with

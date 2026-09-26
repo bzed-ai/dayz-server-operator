@@ -1,0 +1,117 @@
+Running servers
+===============
+
+Start, stop, status
+-------------------
+
+.. code-block:: sh
+
+   dzo start deerisle
+   dzo stop deerisle            # stops and stays stopped
+   dzo status [deerisle]        # build, mods, running, uptime, players, pending updates
+   dzo logs deerisle -f         # server console from journald
+
+``dzo start`` returns when the server answers Steam queries, not just when the
+container runs. Under the hood these are plain systemd user units
+(``dzo-deerisle.service``), so ``systemctl --user`` and ``journalctl --user``
+work too.
+
+Graceful restarts
+-----------------
+
+.. code-block:: sh
+
+   dzo restart deerisle --minutes 30 --lock 3 --delay 3 --text "Restart"
+   dzo restart deerisle --now
+   dzo restart deerisle --cancel
+
+A graceful restart
+
+#. announces the restart in game on a countdown,
+#. locks the server a few minutes before the end,
+#. kicks the remaining players (several passes, then everyone),
+#. waits the delay and restarts the service.
+
+dzo talks to the server over its own BattlEye RCon client. It never sends
+``#shutdown``, which can hang DayZ. If RCon does not answer, the server is
+restarted through systemd right away.
+
+The restart runs as its own systemd unit, so it continues if your SSH session
+ends. When a maintenance restart and an update restart fall together, they are
+merged into one.
+
+Scheduled restarts
+------------------
+
+``restarts.schedule`` in ``instance.yaml`` takes systemd calendar expressions:
+
+.. code-block:: yaml
+
+   restarts:
+     schedule: ["*-*-* 02,06,10,14,18,22:00"]
+     announce: {minutes: 30, lock: 3, delay: 3}
+
+``dzo instance apply <name>`` turns them into ``dzo-restart-<name>.timer``.
+One-off restarts ("today at 18:30") can be scheduled in the web interface; they
+also become systemd timers.
+
+Before any planned restart dzo renders the instance in a dry run while the
+server is still running. If that fails, the restart is skipped, the server keeps
+running and you are alerted. A broken change in the site repository therefore
+never takes a server down.
+
+Health checks and crash loops
+-----------------------------
+
+Every server has two checks, run inside the container:
+
+startup
+   waits until the server answers Steam queries. Long mission loads do not count
+   as failures until ``health.startup_timeout``.
+liveness
+   probes the running server. After ``interval`` × ``retries`` without an answer
+   (default 5 minutes) the container is killed and systemd restarts it.
+
+Three brakes stop endless restarts:
+
+* the pre-restart dry-run render described above;
+* a failed render during a crash restart marks the instance ``failed-render``.
+  It is not tried again until its inputs change or you run
+  ``dzo instance ack-failure <name>``;
+* ``restart_limit``: after ``burst`` starts within ``interval`` the unit stays
+  failed, Icinga turns critical and Discord reports the crash loop.
+
+Console and RCon
+----------------
+
+.. code-block:: sh
+
+   dzo rcon deerisle                  # interactive console
+   dzo rcon deerisle players          # one command
+   dzo rcon rotate deerisle           # new RCon password
+
+The RCon password is generated per instance and bound to localhost where the
+network mode allows it.
+
+Logs
+----
+
+* Server console: journald (``dzo logs <name>``).
+* Profile logs (``*.RPT``, ``script*.log``, ``*.ADM``, crash dumps) are rotated
+  into ``profiles/logs/<timestamp>/`` before each start.
+* After a crash dzo writes a crash summary (the tails of the RPT, script log and
+  ``error.log``) to the journal and to Discord.
+
+Instances
+---------
+
+.. code-block:: sh
+
+   dzo instance create <name>
+   dzo instance apply <name>          # regenerate units and timers after config changes
+   dzo instance clone <old> <new>     # copy the data into a new instance
+   dzo instance remove <name>         # asks whether to keep its snapshots
+   dzo wipe <name>                    # wipe the world, after confirmation and a snapshot
+
+Instances cannot be renamed in place, because the name is part of unit names,
+paths and the database. Clone to the new name and remove the old instance.
