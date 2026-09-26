@@ -1,0 +1,33 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+set -e
+
+# The debhelper marker below expands to, among others, the
+# dh_installsysusers snippet, which runs systemd-sysusers to create the
+# "dayz" user from debian/dzo.sysusers. Our own subuid/linger setup further
+# down needs that user to already exist, so it must run after the
+# expansion, not before - keep it below this point in the file.
+#DEBHELPER#
+
+# sysusers.d creates the "dayz" system user, but it does not allocate a
+# subuid/subgid range, which rootless podman needs. Assign one if none
+# exists yet; leave an existing range alone so a reinstall/upgrade never
+# disturbs a running instance's container namespace mapping.
+if [ "$1" = "configure" ]; then
+	if command -v usermod >/dev/null 2>&1 \
+		&& ! grep -q '^dayz:' /etc/subuid 2>/dev/null; then
+		usermod --add-subuids 100000-165535 --add-subgids 100000-165535 dayz || true
+	fi
+
+	# Podman under systemd user sessions needs the session to keep running
+	# without an interactive login (D-Bus activation, timers).
+	if command -v loginctl >/dev/null 2>&1; then
+		loginctl enable-linger dayz || true
+	fi
+fi
+
+# No game server is ever started here: bringing up an instance is always an
+# explicit "dzo setup"/"dzo instance start" step (D18/§C14).
+
+exit 0

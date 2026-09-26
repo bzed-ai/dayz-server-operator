@@ -1,0 +1,9 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# dzo is deliberately a static, CGO_ENABLED=0 Go binary (D29/§C0): it is
+# bind-mounted read-only into containers for health checks, so it must not
+# depend on the container image's libc at all.
+statically-linked-binary *
+# First local package, not (yet) filed against an upstream bug tracker.
+initial-upload-closes-no-bugs

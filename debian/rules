@@ -1,0 +1,33 @@
+#!/usr/bin/make -f
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# The build uses the upstream Go toolchain (§C0 of IMPLEMENTATION_PLAN.md),
+# not Debian's golang-go, so `go` must already be on PATH when this runs -
+# the CI job installs it before calling dpkg-buildpackage. Vendoring
+# dependencies for a fully offline build (as the plan describes) is
+# deferred (D35, lazy engineering) until a builder without network access
+# actually needs it; today's CI jobs have network access to the Go module
+# proxy.
+
+export CGO_ENABLED = 0
+
+# Force the plain "makefile" buildsystem: without this, dh's auto-detection
+# picks "golang" on the presence of go.mod and pulls in dh-golang's
+# GOPATH-style install step, which is exactly what the plan avoids.
+%:
+	dh $@ --buildsystem=makefile
+
+override_dh_auto_build:
+	$(MAKE) build
+
+override_dh_auto_test:
+	$(MAKE) cover
+
+override_dh_auto_clean:
+	$(MAKE) clean
+	dh_auto_clean
+
+# Nothing to do: the Makefile has no "install" target, and the binary/
+# conffile placement is entirely handled by debian/dzo.install (dh_install).
+override_dh_auto_install:

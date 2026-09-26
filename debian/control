@@ -1,0 +1,36 @@
+Source: dayz-server-operator
+Section: admin
+Priority: optional
+Maintainer: Bernd Zeimetz <bernd@bzed.de>
+Build-Depends: debhelper-compat (= 13), dh-sequence-installsysusers
+Standards-Version: 4.6.2
+Homepage: https://github.com/bzed-ai/dayz-server-operator
+Rules-Requires-Root: no
+
+Package: dzo
+Architecture: any
+Depends:
+ ${misc:Depends},
+ podman (>= 5.4),
+ systemd (>= 257),
+ git,
+ uidmap,
+ passt,
+Recommends:
+ geoipupdate,
+ btrfs-progs,
+ python3,
+ python3-requests,
+Suggests:
+ postgresql,
+ monitoring-plugins-basic,
+Description: DayZ dedicated server operator
+ dzo manages DayZ dedicated server instances on top of rootless podman
+ quadlets: it installs and updates server builds and workshop mods,
+ renders per-instance missions and configuration, and provides a
+ built-in BattlEye RCon client, container health checks and
+ btrfs-snapshot backups.
+ .
+ This package creates the "dayz" system user and its data directories,
+ but never starts any game server on its own; use "dzo setup" after
+ installation to configure and bring up instances.

@@ -1,0 +1,24 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: dayz-server-operator
+Upstream-Contact: Bernd Zeimetz <bernd@bzed.de>
+Source: https://github.com/bzed-ai/dayz-server-operator
+
+Files: *
+Copyright: 2026 Bernd Zeimetz <bernd@bzed.de>
+License: AGPL-3.0-or-later
+Comment: This matches the SPDX-FileCopyrightText/SPDX-License-Identifier
+ header carried by every file in the source tree (REUSE-compliant,
+ `reuse lint`, see D15/NFR-09 of IMPLEMENTATION_PLAN.md). Go module
+ dependencies are downloaded at build time (go.mod/go.sum) and are not
+ part of this source package; their licences are checked in CI against
+ an AGPL-3.0-compatible allow-list (`make licenses`) instead of being
+ listed here.
+
+License: AGPL-3.0-or-later
+ On Debian systems the complete text of the GNU Affero General Public
+ License version 3 can be found in
+ "/usr/share/common-licenses/AGPL-3".
+ .
+ The full licence text also ships in this source package at
+ LICENSES/AGPL-3.0-or-later.txt (LICENSE is a symlink to it, per the
+ REUSE specification).

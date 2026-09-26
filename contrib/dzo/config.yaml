@@ -1,0 +1,33 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# dzo operator configuration (§C2 of IMPLEMENTATION_PLAN.md). Every path
+# below is a default; run `dzo config validate` after editing.
+
+paths:
+  data: /var/lib/dzo
+  # instances, snapshots, cache, secrets and db default to "${data}/...".
+  # instances: ${data}/instances
+  # snapshots: ${data}/snapshots
+  # cache: ${data}/cache
+  # secrets: ${data}/secrets
+  # db: ${data}/db
+
+# site:
+#   remote: https://example.invalid/dzo-site.git
+#   branch: main
+#   deploy_key_path: ${data}/secrets/site-deploy-key
+#   auto_push: false
+
+products:
+  dayz-stable:
+    app_id: 223350
+    workshop_app_id: 221100
+  dayz-experimental:
+    app_id: 1042420
+    workshop_app_id: 221100
+
+# notify:
+#   discord:
+#     - name: default
+#       url: https://discord.com/api/webhooks/...

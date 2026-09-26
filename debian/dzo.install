@@ -1,0 +1,2 @@
+bin/dzo usr/bin
+contrib/dzo/config.yaml etc/dzo

@@ -9,4 +9,12 @@ docs/_build/
 *.buildinfo
 *.changes
 coverage.out
+coverage.out.raw
 coverage.html
+/debian/.debhelper/
+/debian/dzo/
+/debian/debhelper-build-stamp
+/debian/*.debhelper
+/debian/*.debhelper.log
+/debian/*.substvars
+/debian/files
