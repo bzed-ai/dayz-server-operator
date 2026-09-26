@@ -109,7 +109,18 @@ jobs:
     name: Build Debian package
     needs: [lint, reuse, test, licenses]
     runs-on: ubuntu-latest
+    # Built inside a real debian:trixie container, not the Ubuntu host
+    # actions run on by default: dpkg-buildpackage/lintian/debhelper
+    # behaviour is Debian's own, and this is the base every dzo container
+    # image uses (§C15/D21), so packaging should be verified against the
+    # same distro release, not Ubuntu's divergent versions of the same tools.
+    container:
+      image: debian:trixie
     steps:
+      - name: Install git (actions/checkout needs it; the base image has neither)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # `git describe` in the Makefile needs tag history
@@ -118,12 +129,14 @@ jobs:
           go-version-file: go.mod
       - name: Install packaging tools
         run: |
-          sudo apt-get update
+          apt-get update
           # build-essential (make, etc.) isn't pulled in by debhelper/lintian
-          # themselves and isn't preinstalled on a minimal runner, unlike a
+          # themselves and isn't preinstalled in the base image, unlike a
           # real Debian buildd/sbuild chroot; dpkg-checkbuilddeps still wants
           # it present even though Debian policy lets Build-Depends omit it.
-          sudo apt-get install -y --no-install-recommends build-essential debhelper lintian
+          # Running as root here (the container's default user) is why
+          # there's no `sudo` in either apt-get invocation in this job.
+          apt-get install -y --no-install-recommends build-essential debhelper lintian
       - name: dpkg-buildpackage
         run: dpkg-buildpackage -us -uc -b
       - name: lintian
