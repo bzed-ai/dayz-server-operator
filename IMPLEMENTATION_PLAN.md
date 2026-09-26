@@ -32,7 +32,7 @@ Legacy source analysed: `../dayzdockerserver` (branches `main`, `chernarus`, `li
 | D12 | Implementation language | **Go** (see §C1). The user suggested Python and left the choice open once Go libraries were raised. |
 | D13 | Mission directory | **The live mission dir (`mpmissions/<map>`) is persistent game data and is NEVER wiped or recreated.** It is initialised once from the instance's pristine mission (`servermpmissions`, per-instance, usually from a git repo). Afterwards the operator only *updates files in place*: it copies from pristine, merges and writes generated files. See §C6. |
 | D14 | Server products | Several server "products" side by side: **DayZ stable (223350) and DayZ experimental (1042420)** now, extensible to future products (e.g. a DayZ successor). Pristine missions are per instance anyway. |
-| D15 | Licence | **AGPL-3.0-or-later** if every dependency is compatible (checked so far: Apache-2.0, MIT, BSD are compatible, and bercon-cli is AGPL/Apache dual-licensed). Otherwise GPL-3.0; MIT as the last resort. A licence check is enforced in CI. |
+| D15 | Licence | **AGPL-3.0-or-later** if every dependency is compatible (checked so far: Apache-2.0, MIT, BSD are compatible; RCon is our own code). Otherwise GPL-3.0; MIT as the last resort. A licence check is enforced in CI. |
 | D16 | Site repo | Repo name/location free. The **git remote is configurable by URL**, and pull/commit/push behaviour is configurable. |
 | D17 | Naming and packaging | Binary **`dzo`**, service user **`dayz`**. Delivered as a **Debian package**. |
 | D18 | Monitoring | **Discord** notifications, plus **Icinga**-compatible checks for every instance. **Container health checks are mandatory and must work** (startup + liveness). |
@@ -46,6 +46,9 @@ Legacy source analysed: `../dayzdockerserver` (branches `main`, `chernarus`, `li
 | D26 | Database | **SQLite by default, PostgreSQL optional** (same schema, sqlc + goose; CI tests both). Holds players, sessions, bans, schedules, audit, users and jobs. |
 | D27 | Player identity | Players are **always tracked by SteamID64**, never by name. BE-GUID-only sessions (RCon without `dzo-admin`) are linked to the Steam ID once known. |
 | D28 | Analytics | **Optional ClickHouse** for high-volume append-only history (positions, sessions, chat, population, admin events) using MergeTree/TTL/ReplacingMergeTree/AggregatingMergeTree + materialized views. SQLite/PostgreSQL remain the source of truth for mutable state (§C19). |
+| D29 | Platform | **Debian trixie** everywhere (host, images, `.deb`); plan for **podman 5.4.2** / systemd 257; runtime tools **only from Debian packages** (Python only with packaged modules); **Go built with the latest upstream toolchain** (go1.27.x), not trixie's golang-go (§C0). |
+| D30 | RCon | **Built-in BattlEye RCon implementation in dzo**, with no external tools (`bercon-cli`, `dayz_restart`) and no external RCon library (§C8). |
+| D31 | Pre-change backups | Optional **backup/snapshot hook before every change**, including automatic mod updates. The server is stopped for consistency, with built-in backends + custom hooks and an abort/warn policy (§C20). |
 
 ---
 
@@ -261,7 +264,7 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 | ID | Requirement | Legacy source |
 |---|---|---|
 | FR-01 | Manage N DayZ server **instances** on one host under one service user | D3 |
-| FR-02 | Steam account login incl. Steam Guard (interactive once, cached session), anonymous fallback | login |
+| FR-02 | Steam account login with **user input**: username, password, Steam Guard (e-mail code / mobile authenticator code / app confirmation), via CLI and web; cached session; detection of expired sessions with pause of updates, notification and resume after re-login; anonymous where it works | login |
 | FR-03 | Install/update several server **products** side by side (DayZ stable 223350, DayZ experimental 1042420, future products), build-id detection, `validate`, force; each instance selects a product | install/update/forceupdate |
 | FR-04 | Workshop mods (app 221100): add/remove/update all/update selected, name/metadata from `meta.cpp`, size, URL | add/remove/modupdate/mi |
 | FR-05 | Mod freshness check against the Steam Web API (`GetPublishedFileDetails`, no key) | mod_update_check |
@@ -285,8 +288,9 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 | FR-18b | **Discord** notifications (webhook) for updates, restarts, crashes, health changes, failed renders/jobs | – |
 | FR-19 | Status: installed build/version, running, uptime, effective command line, active mods, players | status |
 | FR-20 | Logs: journald for console; rotation of profile logs (`*.log *.RPT *.mdmp *.ADM`) into timestamped dirs; crash summary (tail of error/script/RPT); LogZ output dir per instance | report/rotate |
+| FR-21a | Configurable **backup/snapshot before any change** (server update, mod updates incl. automatic ones, mission/config changes, renders), with built-in btrfs/reflink/archive backends and custom hooks, a failure policy, and **configurable retention (keep N, per trigger, max age, space limits) with guaranteed cleanup** | D31 |
 | FR-21 | Backup (missions storage + profiles), restore, wipe storage with confirmation | backup/wipe |
-| FR-22 | RCon console / commands (players, say, kick, lock/unlock, bans), GeoIP enrichment | bercon |
+| FR-22 | **Built-in** BattlEye RCon client (no external tools): console/commands (players, say, kick, lock/unlock, bans), event stream (connect/GUID/chat), GeoIP enrichment | bercon |
 | FR-23 | Pre-start / post-render **hooks** per instance (traderstocks, live weather, …) | pre_start.sh |
 | FR-24 | Extra per-instance container options: env (e.g. LD_PRELOAD), extra ro mounts (GeoIP, fix libs), CPU pinning/limits, params | D9 |
 | FR-25 | Development mode: render only / container idle for debugging | DEVELOPMENT/DONT_START |
@@ -322,6 +326,38 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 
 # Part C — Design
 
+## C0. Platform baseline: Debian trixie (D29)
+
+Everything targets **Debian 13 "trixie"** (stable): host, container base images, the `.deb`. Versions shipped in trixie (checked 2026-09-26):
+
+| Component | trixie version | Consequence |
+|---|---|---|
+| podman | **5.4.2** | Quadlet/podman features are limited to what 5.4 supports (see below). Newer features only behind runtime version detection. |
+| systemd | 257 | `systemd-creds`, transient timers (`systemd-run --on-calendar`), `sysusers.d`/`tmpfiles.d` all available |
+| passt/pasta | 2025-05 snapshot | default rootless network backend for the `publish` network mode |
+| python3 | 3.13 (+ `python3-requests` 2.32) | only for hooks/legacy helpers; **packaged modules only, no pip/venv** |
+| steamcmd | `steamcmd` (non-free, i386) | used inside the `dzo-steamcmd` image (as in legacy) |
+| geoipupdate | 7.1 (contrib) | GeoIP DB updates via its own systemd timer |
+| libjs-htmx / libjs-leaflet | 2.0.4 / 1.7.1 | web UI assets are taken **from the Debian packages** (§C12) |
+| postgresql | 17 | optional DB backend (§C18) |
+| monitoring-plugins-basic, btrfs-progs, git, uidmap | packaged | Recommends/Depends of the `.deb` |
+| golang-go | 1.24 (1.26 in backports) | **not used for building** (see below) |
+
+**Rules:**
+* **Runtime dependencies come from Debian packages only** (trixie main/contrib/non-free, trixie-backports only when unavoidable,
+  documented per package). Helper tools and hooks may use Python, but only with Debian-packaged modules (e.g. `python3-requests`), never pip.
+  External binaries are not downloaded at build or runtime (unlike legacy `bercon-cli`/`bercon` via curl). Functionality comes from dzo itself or from Debian packages.
+* **Go builds use the latest upstream Go toolchain** (currently **go1.27.1**, from go.dev), not trixie's golang-go. `go.mod` declares
+  `go 1.27` + a pinned `toolchain` line, and CI/builders install the official tarball with a verified checksum (or use the official `golang:1.27` image
+  for pure Go jobs). Renovate bumps the toolchain. The resulting binary is **static** (`CGO_ENABLED=0`) and therefore independent of trixie's libraries.
+  Go module dependencies are vendored (`go mod vendor`); they are compiled into the binary and are not "tools on the host".
+* **Container images** are based on `debian:trixie-slim` and install only Debian packages.
+* **Podman 5.4.2 feature baseline for quadlets.** Keys used by the plan (`HealthStartupCmd`/`Interval`/`Retries`/`Success`, `HealthOnFailure`,
+  `Notify=healthy`, `.build` units, `Volume=`, `Network=host`, `[Service]` passthrough) are all expected to exist in 5.4. This is **verified on a trixie VM
+  in spike S6**, and anything missing gets a fallback (R7). Features newer than 5.4 (e.g. quadlet `ReloadCmd`/`ReloadSignal`, the `podman quadlet` management
+  CLI) are **not used**. dzo generates quadlet files itself and does not rely on them. A startup check refuses to run on podman < 5.4 with a clear message.
+* CI integration and packaging tests run in **trixie** containers/VMs, so the podman and systemd behaviour matches production.
+
 ## C1. Language choice: Go (with Python remaining possible for hooks)
 
 The user suggested Python and left Go open. **Recommendation: Go.**
@@ -329,7 +365,7 @@ The user suggested Python and left Go open. **Recommendation: Go.**
 | Criterion | Go | Python |
 |---|---|---|
 | Deployment on host | single static binary, no venv, trivially run from quadlets/timers and inside containers (healthcheck) | venv/pipx on host; the interpreter must also be in the runtime image for health |
-| DayZ ecosystem | WoozyMasta libs: `bercon-cli` pkg (BattlEye RCon, players parsing, GeoIP), `a2s` (server query incl. DayZ A3SB), `dzce` (typed CE models + economycore merge, v0.x), `steam/filedetails` (workshop API), `dzid` (Steam64→BE GUID); ecosystem around LogZ/MetricZ (already used as servermods), `metricz-exporter`, `dayz-exporter` | few maintained libs; RCon client and CE parsing would be self-written |
+| DayZ ecosystem | own built-in BattlEye RCon implementation (§C8); WoozyMasta libs: `a2s` (server query incl. DayZ A3SB), `dzce` (typed CE models + economycore merge, v0.x), `steam/filedetails` (workshop API), `dzid` (Steam64→BE GUID); ecosystem around LogZ/MetricZ (already used as servermods), `metricz-exporter`, `dayz-exporter` | few maintained libs; RCon client and CE parsing would be self-written |
 | systemd / podman | `go-systemd/dbus`, podman CLI (or bindings) | `dbus-next` / subprocess |
 | Web (later) | stdlib `net/http` + `html/template` + htmx, assets embedded in the binary | FastAPI + Jinja + htmx |
 | XML fidelity | `encoding/xml` is weak at round-tripping comments/order → use `beevik/etree` for merge, `dzce` for typed validation | `lxml` excellent |
@@ -337,9 +373,9 @@ The user suggested Python and left Go open. **Recommendation: Go.**
 Consequences:
 
 * The web layer follows D11 in Go form: server-rendered templates + htmx, no Node.
-* Hooks are plain executables with a defined environment. Existing Python helpers (`update_dayz_weather`, `traderstocks`) keep working as hooks (Python available on the host) and can be ported to built-in Go plugins later.
+* Hooks are plain executables with a defined environment. Existing Python helpers (`update_dayz_weather`, `traderstocks`) keep working as hooks (Debian `python3` + `python3-requests`, no pip) and can be ported to built-in Go plugins later.
 * `dzce` is pre-1.0: wrap it behind our own interfaces and pin versions. Fall back to an etree-based merge where it does not fit (e.g. `xmlmerge` semantics, see §E spike S3).
-* Licence (D15): the project is **AGPL-3.0-or-later**. Planned dependencies and their licences: `bercon-cli` (AGPL-3.0/Apache-2.0), `a2s` (MIT), `dzce` (MIT), `beevik/etree` (BSD-2), `go-systemd` (Apache-2.0), `cobra` (Apache-2.0), `modernc.org/sqlite` (BSD-3), htmx (0BSD/BSD-2). All are compatible with AGPLv3. CI runs `go-licenses check` with an allow-list, so an incompatible dependency fails the build. If one is ever unavoidable, fall back to GPL-3.0, and to MIT as the last resort.
+* Licence (D15): the project is **AGPL-3.0-or-later**. Planned dependencies and their licences: `a2s` (MIT), `dzce` (MIT), `beevik/etree` (BSD-2), `go-systemd` (Apache-2.0), `cobra` (Apache-2.0), `modernc.org/sqlite` (BSD-3), htmx (0BSD/BSD-2). All are compatible with AGPLv3. CI runs `go-licenses check` with an allow-list, so an incompatible dependency fails the build. If one is ever unavoidable, fall back to GPL-3.0, and to MIT as the last resort.
 
 Working name for the binary: **`dzo`** (dayz-server-operator). Cheap to rename.
 
@@ -467,7 +503,8 @@ uncommitted edits block automatic pulls, and the operator reports them instead o
    `dzpodman build/cleanup`. The health check binary is **not** baked into the image: the static
    `/usr/bin/dzo` from the package is bind-mounted read-only (`/usr/local/bin/dzo`), so the check always
    matches the installed operator version.
-2. **`dzo-steamcmd`**: `debian:trixie-slim` + `steamcmd` (i386) + the `steamservice.so` noise fix. Used
+2. **`dzo-steamcmd`**: `debian:trixie-slim` + Debian's `steamcmd` package (non-free, i386 multiarch). The legacy `steamservice.so` blob
+   copied from the repo is dropped, because the warning it silenced is cosmetic and only packaged software goes into images. Used
    only by short-lived `podman run` jobs started by the operator. Its mounts are the steamcmd home (secrets) and
    `cache/steamcmd/<product>`. **Never** mounts live instance data.
 
@@ -526,6 +563,7 @@ or, once it exists, scheduled inside the `dzo serve` daemon.
 | `dzo-exporter.service` | long-running: `/metrics` (Prometheus) + `/status` (JSON for remote Icinga), §C9 |
 | `dzo-status.timer/.service` | every minute: `dzo status --write /run/dzo/status/` (local snapshot + watchdog) |
 | `dzo-site-pull.timer/.service` | optional periodic `dzo site pull` |
+| `dzo-backup-prune.timer/.service` | daily: enforce backup retention, clean up interrupted backups, orphan scan (§C20) |
 | `dzo-web.service` (phase 3) | `dzo serve` (web UI + API + scheduler), bound to localhost, behind a reverse proxy. Once it runs, it may take over the timer schedules, or keep driving the same timers. |
 
 Design notes:
@@ -665,7 +703,7 @@ binary, and the launch-parameter/ports profile. A future product (e.g. a DayZ su
 if its launch or config model differs, a new **product driver** in code (an interface: `Download`, `BuildArgs`,
 `RenderConfig`, `HealthProbe`, `RCon`). Each instance references exactly one product. Pristine missions are per instance anyway.
 
-* `dzo steam login` → interactive `podman run -it dzo-steamcmd` with the secrets home. The session is reused afterwards.
+* **Steam authentication**, see below. After a successful login the session is reused by all download jobs.
 * Server build per product: `app_info_print` build id vs `cache/products/<product>/current`. On change: steamcmd
   `app_update validate` into `cache/steamcmd/<product>`, then snapshot (reflink) into `<buildid>/`.
 * Mods: freshness via `steam/filedetails` (`time_updated`, **not** local mtime), download with
@@ -676,19 +714,73 @@ if its launch or config model differs, a new **product driver** in code (an inte
   1. Determine new server builds (per product in use) and mod generations.
   2. Download + snapshot (servers keep running; nothing mounted changes).
   3. Map affected instances (a product build affects all instances of that product; mod X affects instances using X).
-  4. Per affected instance and policy: `auto` → graceful restart with the update announcement (the new
-     generation is picked up by re-render + regenerated quadlet); `notify` → record + notify; `manual` → record.
+  4. Per affected instance and policy: `auto` → graceful restart with the update announcement, running **stop → pre-change backup/snapshot hook (§C20)
+     → switch generation (re-render + regenerated quadlet) → start**; if the backup fails with policy `abort`, the instance restarts on the old generation and an alert is sent; `notify` → record + notify; `manual` → record.
   5. Garbage-collect generations not referenced by any instance and older than N days.
 * Rollback: `dzo instance pin <name> --mod <id>@<gen>` / `--build <buildid>`.
 * A global lock (flock) ensures a single steamcmd job at a time.
 
+### Steam authentication (interactive, expect user input)
+
+steamcmd needs a real Steam account for workshop content (anonymous only works for some server apps). A login needs
+**username + password + a Steam Guard factor**: an e-mail code, a mobile authenticator (TOTP) code, or a **confirmation in the Steam
+mobile app**. Steam caches a login token in the steamcmd home (`config/config.vdf`, `ssfn*`). It usually survives for a long time, but it
+**expires or is invalidated** (password change, Steam-side revocation, new device detection, long inactivity). A re-login then needs a human.
+dzo must therefore treat Steam auth as an **interactive, recurring operator task**, not a one-time setup.
+
+* **Account:** a dedicated Steam account that owns DayZ is recommended (not a personal main account), with Steam Guard enabled.
+  The username is in `/etc/dzo/config.yaml` per product/workshop app (usually one account for everything).
+* **Interactive login flow:** dzo runs steamcmd in the `dzo-steamcmd` container **attached to a pseudo-terminal** (`creack/pty`, MIT)
+  and drives it as a small state machine. It recognises the prompts (password, Steam Guard e-mail code, two-factor code, "confirm in the
+  mobile app", success, failure types) and relays each one to the user:
+  * **CLI:** `dzo steam login [--user name]` asks for the password (no echo) and then the code, or shows "confirm in the Steam app…" and
+    waits with a timeout. It also works over SSH, and `dzo steam login --passthrough` is a raw pty fallback if Steam changes its prompts.
+  * **Web UI (phase 3):** a "Steam login required" banner and a form wizard (password → code / waiting for app confirmation), streamed via SSE,
+    with the permission `steam.auth`, CSRF protection, and a short-lived server-side session that holds the pty. The same state machine is used.
+* **Secrets handling:**
+  * By default the password is **not stored**. It is used once for the pty session and wiped from memory. Only the Steam
+    session files live in `secrets/steamcmd-home/` (0700, owned by `dayz`, never in git or backups unless encrypted).
+  * Optional `steam.store_password: true` for unattended re-logins when only the session expired and Steam accepts the cached device
+    without a new Guard code. It is stored **encrypted with `systemd-creds`** (host key / TPM2 if available), never in plain text in the config.
+    A Guard code or app confirmation can still be required at any time. That is the expected case, not an error.
+  * TOTP shared secrets (for fully automatic mobile-authenticator codes) are **not** supported by default. Holding them on the server would
+    defeat the second factor. If you ever want it, it is an explicit opt-in (Q21).
+  * steamcmd output is **scrubbed** before logging (password echo, tokens) and never stored raw in job logs.
+* **Detecting that auth is needed:** every steamcmd job classifies failures (`Cached credentials not found`, `Invalid Password`,
+  `Two-factor code mismatch`, `Login Failure`, `Rate Limit Exceeded`, `No subscription`, …). Auth-related failures set the global
+  state **`steam_auth_required`**:
+  * The update engine pauses downloads. **No restarts are triggered** for updates it cannot download. Running servers keep running on
+    their current generations, and pending update jobs are kept and resume automatically after a successful login.
+  * Notifications: Discord (admin target, once, with a reminder after N hours), `dzo_steam_session_valid 0` + `dzo_steam_auth_required 1`
+    in `/metrics`, and `dzo check remote --steam` → WARNING, then CRITICAL after a configurable time. Icinga shows it.
+  * `dzo steam status` shows account, last successful login, last successful download, and current state.
+* **Lockout protection:** a failed password/code is never retried automatically. Steam rate limits are respected with exponential backoff and
+  a clear "rate limited until …" state, so automatic retries can never lock the account.
+* **Proactive check:** a cheap periodic probe (part of the hourly update check: `+login` with cached credentials + `+quit`) detects expiry before an
+  urgent update is needed, so an admin can re-authenticate at a convenient time.
+* **Tests:** a scripted fake steamcmd (pty) reproduces all prompt/failure variants, so the state machine, the CLI and web flows and the pause/resume logic
+  are covered without real credentials (and count toward the 85 %).
+
 ## C8. RCon and graceful restart (port of `dayz_restart`)
 
-* The RCon client comes from `bercon-cli`'s package (evaluate spike S4) with our retry/reconnect policy wrapped around it:
-  auth, `version` probe, keep-alive, reconnect on non-OK, per-command timeout.
+* **Built-in BattlEye RCon client** (`internal/battleye/rcon`, our own implementation, no external tools and no external RCon library):
+  * Protocol (BattlEye RCon over UDP): `BE` header + CRC32, login packet, command packets with a sequence number (0–255 wrap),
+    **multi-packet responses** (reassembly by index/count), **server messages** (type 0x02) that must be acknowledged within the timeout
+    (otherwise BattlEye drops the client), and keep-alive (an empty command) at least every 45 s.
+  * A connection manager per instance: one long-lived authenticated session shared by all users (restart jobs, web console, player tracking,
+    broadcasts), a command queue with per-command timeouts, automatic reconnect with backoff, and a `version` probe as a liveness check.
+  * **Event stream** from server messages: player connect (slot, name, IP:port), "Verified GUID", disconnect, kicks, chat (`(Global)`, `(Side)`, `(Direct)`, …),
+    and RCon admin logins. These are parsed into typed events for player tracking (§C18), chat log, ban enforcement and Discord.
+  * Typed helpers over the raw commands: `players` (parsed: slot, IP, port, ping, GUID, verified, name, lobby), `say`, `kick`, `#lock`/`#unlock`,
+    `bans`/`addBan`/`removeBan`/`loadBans`/`writeBans`, `#kick -1`, `missions`, `version`.
+  * GeoIP enrichment is done by dzo's own GeoIP layer (§C18), not in the RCon client.
+  * Fully unit-tested against an **in-process fake BattlEye server** (packet loss, reordering, multi-packet responses, missed acks, auth failures, CRC errors),
+    plus fuzzing of the packet parser. It is part of the 85 % coverage. Legacy `bercon-cli` and `dayz_restart` behaviour serves only as a reference for tests.
+  * The RCon endpoint is reached from the host (`127.0.0.1:<rcon>` with host networking, or the published port). `RConIP` is set to `127.0.0.1` where possible (S5).
 * `dzo restart <name> [--minutes 30 --lock 3 --delay 3 --text "…"] [--now]`:
   announcement schedule as in A4 → `#lock` at the offset (retry) → up to 3 passes of `players` + `kick <id> <reason>`,
-  then `#kick -1` → wait the delay → `systemctl --user restart dzo-<name>.service`.
+  then `#kick -1` → wait the delay → restart. A plain restart is `systemctl --user restart dzo-<name>.service`. If a pre-change backup is due
+  (§C20), the job runs `stop` → backup → `start`, and the start renders/applies (`ExecStartPre`).
   **No `#shutdown`.** If RCon is unreachable: log it and restart via systemd immediately (configurable).
 * It runs as a transient systemd unit (`systemd-run --user --unit dzo-restart-<name>`), or as the service of the
   restart timer, so it survives CLI disconnects, is visible, and is cancellable (`dzo restart <name> --cancel` sends `#unlock` + an announcement).
@@ -770,7 +862,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 * Each instance uses the default unless `notify.discord` lists other targets (it can list several; `[]` disables).
   Per target, an event filter (e.g. restarts → public channel; drift, render and job failures → admin channel).
 * Events: update detected/downloaded/applied, restart scheduled/started/finished, health unhealthy/recovered, crash loop,
-  render/validation failed, drift detected, steam session expired, job failed.
+  render/validation failed, drift detected, **steam login required / session expired** (with reminders), job failed.
 * Rate limiting + coalescing (e.g. one message for "12 mods updated, 3 servers restarting"). Templated messages (Go templates) per event.
 * A `Notifier` interface, so mail/Matrix/etc. can be added later. `dzo notify test [--target x]`.
 
@@ -789,7 +881,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 | `dzpodman start/stop/restart` | `dzo instance apply <name>` (render quadlets + daemon-reload + enable), `dzo start/stop/restart <name>` |
 | `dzpodman logs` | `dzo logs <name> [-f]` (journal) |
 | `dzpodman exec/run` | `dzo shell <name>` (debug container with the same mounts), `dzo exec <name> …` |
-| `dz login` | `dzo steam login` |
+| `dz login` | `dzo steam login [--user] [--passthrough]`, `dzo steam status` (interactive: password + Steam Guard code or app confirmation) |
 | `dz install / update / forceupdate` | `dzo product install <product>`, `dzo update check [--apply] [--force]` |
 | `dz add / remove / m / mi` | `dzo mod add <id> [--instance x --server]`, `dzo mod remove`, `dzo mod update [ids…]` |
 | `dz map` | `dzo mission init/update/status/rollback/reinit <name>` (pristine fetch, one-time init, in-place update, snapshots) |
@@ -805,7 +897,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 
 ## C11. Hooks and extensibility
 
-* Hook points: `post_download(mod)`, `post_merge(mod)`, `post_render`, `pre_start`, `post_stop`, `pre_update`, `post_update`.
+* Hook points: `pre_change_backup` (§C20), `post_download(mod)`, `post_merge(mod)`, `post_render`, `pre_start`, `post_stop`, `pre_update`, `post_update`.
 * A hook is an executable with the env contract `DZO_*` and a JSON context on stdin. Non-zero exit aborts (configurable).
 * Built-in Go plugins over time: `traderstocks`, `weather` (Open-Meteo), `nominal-scale` (authoring helper).
 * Core as a Go library (`internal/…` → a `pkg/…` API later); CLI and web are thin adapters over one service layer with
@@ -813,7 +905,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 
 ## C12. Web platform (phase 3+)
 
-* `dzo serve`: `net/http` + `html/template` + htmx (vendored, embedded), SSE for live logs, job progress, player lists and the map.
+* `dzo serve`: `net/http` + `html/template` + htmx (served from Debian's `libjs-htmx`, `/usr/share/javascript/htmx/`; an embedded copy only for non-deb dev builds and tests), SSE for live logs, job progress, player lists and the map.
 * Pages: dashboard (instances, players online, build, pending updates), instance detail (mods with drag-order,
   overlays, serverDZ.cfg editor with diff, render diff, RCon console), **players and moderation (§C18)**, **admin map (§C16/§C17)**,
   **schedules (restarts, broadcasts)**, mod search (Steam Web API), jobs, backups, audit log, and later an XML/JSON editor with `dzce`
@@ -837,8 +929,9 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 
 ## C14. Debian packaging (D17)
 
-* Source package `dayz-server-operator` with a proper `debian/` directory: `dh` + `dh-golang`, Go modules **vendored**
-  (`go mod vendor`, so builds work offline), `CGO_ENABLED=0` static binary. `debian/copyright` is generated/checked
+* Source package `dayz-server-operator` with a proper `debian/` directory, targeting **trixie**: plain `dh` with `override_dh_auto_build`/`_test`
+  calling the Makefile (no `dh-golang`, because that ties the build to Debian's Go). The build uses the **upstream Go toolchain** (§C0) found via `GO`/`PATH`
+  in the builder, Go modules are **vendored** (`go mod vendor`, so builds work offline), and the result is a `CGO_ENABLED=0` static binary. `debian/copyright` is generated/checked
   against the vendored licences (feeds into the AGPL compatibility check).
 * Binary package `dzo` ships:
   * `/usr/bin/dzo` (static; also bind-mounted into containers for health checks)
@@ -849,10 +942,11 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 * `postinst`: allocate **subuid/subgid** ranges for `dayz` (sysusers does not do this; needed for rootless podman),
   `loginctl enable-linger dayz`, and **no** automatic start of game servers. `dzo setup` (run as `dayz`) does the
   first-time steps: image builds, steam login, site repo clone.
-* Depends: `podman (>= 5)`, `systemd`, `git`, `uidmap`, `passt`. Recommends: `btrfs-progs`, `monitoring-plugins-basic`.
+* Depends: `podman (>= 5.4)`, `systemd (>= 257)`, `git`, `uidmap`, `passt`, `libjs-htmx`, `libjs-leaflet`. Recommends: `btrfs-progs`, `geoipupdate`,
+  `python3`, `python3-requests` (for hooks). Suggests: `postgresql`, `monitoring-plugins-basic`. All are available in trixie.
 * Upgrades: `postinst` triggers `dzo quadlet regenerate` for the `dayz` user (via `systemctl --user -M dayz@`) so
   generated units follow template changes. Running servers are not restarted automatically.
-* The `.deb` is built in CI (`dpkg-buildpackage` in a `debian:trixie` container) and published as a **CI artifact / release asset**. No apt repo for now (D21).
+* The `.deb` is built in CI (`dpkg-buildpackage` in a `debian:trixie` container with debhelper from trixie + the upstream Go tarball) and published as a **CI artifact / release asset**. No apt repo for now (D21).
 
 ## C15. Testing strategy and CI (D20, D21)
 
@@ -880,9 +974,9 @@ CI (identical logic, two front-ends):
   (`go-licenses check` against the AGPL-compatible allow-list), `build` (static, `-trimpath`, version stamping), `deb`, `integration`.
 * **`.github/workflows/ci.yml`**: jobs lint → test(+coverage gate, upload coverage report) → licenses → build → deb (artifact)
   → integration-podman. Tags create a GitHub release with the binary + `.deb`.
-* **`.gitlab-ci.yml`**: same stages, `golang` + `debian:trixie` images, coverage regex + Cobertura report for MR widgets,
+* **`.gitlab-ci.yml`**: same stages, official `golang:1.27` image for pure Go jobs + `debian:trixie` (+ upstream Go) for packaging and integration, coverage regex + Cobertura report for MR widgets,
   `.deb` as job artifact / release asset, podman integration job on a tagged runner.
-* Renovate/Dependabot for Go modules and base images (the licence check runs on every bump).
+* Renovate/Dependabot for Go modules, the Go toolchain version and base images (the licence check runs on every bump).
 
 ## C16. `dzo-admin` servermod and live admin map (D23, Q17, Q19, Q20)
 
@@ -992,7 +1086,7 @@ a few static and tracked markers), so third-party mod authors can copy it.
   (who, what, which player/vehicle, result), plus optional Discord mirroring to an admin channel. Class names are validated against a
   per-instance allow/deny list, with rate limits per admin and per target. The endpoint accepts only the instance token, only on localhost.
 * **Metrics:** state pushed by the mod also feeds `/metrics` (players online per instance, vehicles per class, etc.), independent of MetricZ.
-* **Map rendering:** Leaflet (vendored JS file, no build chain) on tiles generated from the map's own `data.pbo`, see §C17.
+* **Map rendering:** Leaflet (from Debian's `libjs-leaflet`, no build chain) on tiles generated from the map's own `data.pbo`, see §C17.
 * `dzo` works fully without the mod (RCon + systemd, no live map). Capabilities are discovered via `hello` and the UI hides what is unavailable.
 
 ## C17. Map tile pipeline (Q18)
@@ -1110,7 +1204,7 @@ map linearly to pixels, and clicking the map returns world coordinates for telep
 
 ### GeoIP
 
-* A MaxMind GeoLite2 Country (and optionally ASN) database, kept up to date by `geoipupdate` on its own systemd timer
+* A MaxMind GeoLite2 Country (and optionally ASN) database, kept up to date by Debian's `geoipupdate` (contrib) on its own systemd timer
   (license key in config; legacy servers already mount `/var/lib/GeoIP`), or DB-IP lite as a licence alternative.
   dzo reads the `.mmdb` directly (Go `maxminddb` reader) and reloads it on file change without restarting.
 * The country is shown everywhere a player appears and is stored per session. The IP address itself is PII (see privacy below).
@@ -1213,6 +1307,103 @@ map linearly to pixels, and clicking the map returns world coordinates for telep
 * Tests: the ClickHouse integration test job uses the official ClickHouse service container in both CIs. The analytics writer and query code count toward
   the 85 % coverage (unit tests use an interface fake, and integration tests cover the SQL).
 
+## C20. Pre-change backups and snapshots (D31)
+
+Any operation that changes an instance can first create a **backup or snapshot through a configurable hook**. This includes automatic mod
+updates run unattended at night.
+
+**Trigger points** (each individually enabled per instance, defaults in `site.yaml`):
+
+| Trigger | When |
+|---|---|
+| `update` | before an instance switches to a new product build (server update) |
+| `mod_update` | before an instance switches to new mod generations (**incl. the automatic hourly update pipeline**) |
+| `mission_update` | before `dzo mission update` / pristine changes are applied |
+| `render` | before every render/apply (every start; cheap with btrfs snapshots, off by default) |
+| `config_change` | before applying site repo changes (instance.yaml, overlays, serverDZ.cfg) |
+| `import`, `reinit`, `restore`, `wipe`, `db_migrate` | before destructive or large operations (**always on**, cannot be disabled) |
+
+**Consistency: snapshot while the server is stopped.** For triggers that come with a restart (updates, mod updates, config changes), the
+restart job runs **stop → pre-change backup → render/apply → start** instead of a plain `systemctl restart`. The backup therefore sees a
+quiescent mission/storage, with no half-written `storage_1`. Triggers without a restart (e.g. a mission update prepared in advance) back up at
+the next stop. `--now` is available for an explicit online backup.
+
+**What gets backed up** (per instance): `mpmissions/` (live mission incl. storage), `profiles/`, `runtime/`, the manifest, and the relevant
+DB rows (a database dump when the whole DB is included). Cache generations are immutable and not included, since a rollback just pins the old generation (§C7).
+
+**Backends:**
+* Built-in:
+  * `btrfs-snapshot`: read-only subvolume snapshot of the instance directory (instant). This requires the instance dir to be a subvolume, and `dzo setup` creates it that way on btrfs.
+  * `reflink-copy`: `cp --reflink=auto` tree copy (instant on btrfs/XFS, a full copy elsewhere).
+  * `archive`: `tar` + `zstd` archive (Debian packages) into `backups/`.
+* `hook`: **any executable** (e.g. a script calling `restic`, `borgbackup`, `zfs snapshot`, LVM, or a remote backup system; use the Debian-packaged tools).
+  Contract: env `DZO_INSTANCE`, `DZO_REASON` (trigger), `DZO_JOB_ID`, `DZO_PATHS` (colon-separated), `DZO_SERVER_STOPPED=1|0`,
+  `DZO_FROM` / `DZO_TO` (e.g. old/new build or mod generations), and a JSON context on stdin. The hook prints an optional backup id on stdout,
+  which is stored in the job record and shown in `dzo backup list` / the web UI.
+* Several backends can be chained (e.g. a fast local btrfs snapshot + a restic hook to offsite).
+
+**Failure policy** (per trigger): `abort` (default for updates: the update is not applied, the server is started again on the old
+generation, and an alert is raised), `warn` (continue + alert), or `skip`. Timeouts per hook. Results are notified via Discord and shown in metrics
+(`dzo_backup_last_success_timestamp{instance,reason}`, `dzo_backup_failures_total`).
+
+**Retention (built-in backends): configurable and enforced.**
+
+* **Settings** per backend (defaults in `site.yaml`, override per instance):
+  * `keep` (number of backups to keep, default e.g. 10), optionally **per trigger** (`keep_by_reason: {mod_update: 5, update: 10, render: 3}`),
+    since frequent automatic mod updates must not push out the rarer server-update backups;
+  * optional `max_age` (e.g. `30d`) and `min_keep` (never go below N, even if they are older than `max_age`);
+  * optional `max_bytes` / `min_free_bytes` for the backup location (archives, reflink copies): the oldest backups are pruned first,
+    but never below `min_keep`. If space still does not suffice, **the new backup fails with the configured policy instead of deleting protected ones**.
+  * `pinned` backups (`dzo backup pin <id>`, e.g. "before migration") are never pruned automatically.
+* **Index as the single source of truth:** every built-in backup is recorded in the DB (id, instance, backend, reason, created_at, path/subvolume,
+  size, state `creating` → `complete` | `failed` → `deleting` → `deleted`, pinned). Pruning only ever acts on entries of this index. It **never
+  deletes by globbing directories**, and it verifies that a path to delete lies inside the configured backup root of that instance
+  (defence against misconfiguration).
+* **When cleanup runs:**
+  1. right after each successful backup (for the same instance/backend/trigger);
+  2. via the `dzo-backup-prune.timer` (daily) for all instances, which catches age-based expiry and anything missed;
+  3. manually with `dzo backup prune [<name>] [--dry-run]`.
+  Pruning only happens **after the new backup completed successfully**, so a failing backup never leaves you with fewer good backups.
+* **Proper deletion per backend:**
+  * `btrfs-snapshot`: `btrfs subvolume delete` (read-only snapshots are made writable first if needed). A snapshot is only removed from the index after the command succeeded.
+    Optional `btrfs subvolume sync` to reclaim space before reporting sizes.
+  * `reflink-copy`: remove the tree (with a path check against the backup root). Partially deleted trees stay `deleting` and are retried.
+  * `archive`: remove the archive + its checksum/metadata file.
+  * Deletions are idempotent and retried on the next run. Failures are reported (`dzo_backup_prune_failures_total`, Discord, `dzo check remote --backups`).
+* **Orphan and leftover handling:**
+  * Crashed/interrupted backups (`creating` older than the timeout) are cleaned up and marked `failed`.
+  * An **orphan scan** (daily, and part of `dzo backup prune`) reports snapshots/dirs/archives inside the backup root that are **not** in the index
+    (e.g. manual copies or a restored DB). They are **reported, not deleted**, unless `dzo backup prune --adopt-orphans` / `--delete-orphans` is run explicitly.
+  * Index entries whose files no longer exist are marked `missing` and reported.
+* **Removing an instance** (`dzo instance remove`) asks whether its backups are kept (default) or deleted, and lists what will be removed.
+* **Visibility:** `dzo backup list [<name>]` (with sizes, reason, pinned, expiry per retention), metrics `dzo_backup_count{instance,backend}`,
+  `dzo_backup_bytes{instance,backend}`, `dzo_backup_oldest_timestamp`, and the web UI backup page.
+* **Tests:** retention selection is a pure function (property tests: never below `min_keep`, never pinned, never outside the root, newest always kept),
+  plus backend integration tests on a loopback btrfs filesystem in CI.
+
+Hook backends manage their own retention (e.g. `restic forget --prune`). dzo can call an optional `prune` command of the hook after each
+backup and on the daily timer, with the same `keep`/`max_age` values passed as env.
+
+**Restore:** `dzo restore <name> <backup-id>` works for the built-in backends (the instance is stopped, a safety snapshot of the current state is taken,
+then restore). Hook backends can register a `restore` command. Every restore is audited.
+
+Config example (`instance.yaml`):
+```yaml
+backup:
+  before: [update, mod_update, config_change]     # render: false by default
+  backends:
+    - type: btrfs-snapshot
+      keep: 10                                   # total per instance/backend
+      keep_by_reason: {mod_update: 5, update: 10}
+      max_age: 30d
+      min_keep: 3
+    - {type: archive, keep: 3, max_bytes: 200GiB, min_free_bytes: 50GiB}
+    - {type: hook, exec: hooks/restic-backup.sh, timeout: 30m, on_failure: warn}
+  on_failure: abort
+```
+
+This complements the per-render manifest snapshots of changed files (§C6), which stay as a cheap, always-on safety net.
+
 ---
 
 # Part D — Project structure (Go)
@@ -1230,7 +1421,8 @@ internal/
   render/                   render pipeline, merge strategy registry
   ce/                       XML/JSON merge + normalisation (etree, dzce adapters)
   servercfg/                serverDZ.cfg parser/writer
-  battleye/                 BE cfg, rcon client wrapper, restart sequence
+  battleye/                 BE cfg, built-in rcon protocol client + event parser, restart sequence
+  backup/                   pre-change backup triggers, btrfs/reflink/archive backends, hook runner, retention, restore
   quadlet/                  unit + timer templates, generation, systemd (dbus) control
   instance/                 lifecycle, status, backup/restore
   update/                   update orchestration, policies
@@ -1255,7 +1447,7 @@ docs/
 LICENSE                     AGPL-3.0-or-later
 ```
 
-Tooling: Go ≥ 1.23 (the version available in Debian trixie or backports), `golangci-lint`, `go-licenses`,
+Tooling: latest upstream Go (go1.27.x, pinned via the `toolchain` directive; not trixie's golang-go), `golangci-lint`, `go-licenses`,
 `make test` (coverage gate 85 %), golden tests, `make deb`. CI on GitHub Actions and GitLab from the first commit (§C15).
 The `dzo-admin` servermod lives in a separate repository.
 
@@ -1272,9 +1464,10 @@ Each phase ends with a working, deployable state.
 * **S1** read-only shared server root with nested mounts: does DayZServer (1.29, stable + experimental) run with `/dayz` ro? Which paths must be writable?
 * **S2** live mission as a nested rw mount (`/dayz/mpmissions`) under a ro root. Also make an inventory of what the game and the mods on our five servers write into the mission dir (storage, Expansion, Editor exports, …), to validate the managed/unmanaged split of §C6.
 * **S3** exact `xmlmerge` (gwenhywfar) semantics on our files (duplicates, attribute handling) vs etree/`dzce` merge.
-* **S4** `bercon-cli` package fitness (timeouts, reconnect, player parsing) vs a small own client.
+* **S4** built-in RCon client against real DayZ servers (stable + experimental): multi-packet `players` with 60+ players, server-message ack timing,
+  keep-alive, behaviour on server restart, and the event message formats (connect/GUID/chat/kick) captured as fixtures.
 * **S5** host networking with several instances: port layout, RCon bound to localhost, A2S probe from inside the container with both network modes.
-* **S6** quadlet/podman features on the target host: `HealthStartup*`, `HealthOnFailure=kill` + `Restart=always`, `Notify=healthy`, nested `Volume=` ordering, `ExecStartPre` time limits, `.build` units in rootless mode, timers generated for the `dayz` user.
+* **S6** quadlet/podman features on **trixie's podman 5.4.2** (VM): `HealthStartup*`, `HealthOnFailure=kill` + `Restart=always`, `Notify=healthy`, nested `Volume=` ordering, `ExecStartPre` time limits, `.build` units in rootless mode, timers generated for the `dayz` user.
 * **S7** confirm the host filesystem (btrfs?) and reflink/snapshot behaviour for caches and mission snapshots.
 * **S8** (end of Phase 2) `dzo-admin` feasibility with the `dayz-dev` skill: `RestApi` polling of `127.0.0.1` from a servermod (latency, stability), and server-side-only implementation of message/teleport/spawn/vehicle repair+delete; state push of all players/vehicles (payload size, server FPS impact); identity events on connect (SteamID64, BE GUID, IP) and the enumeration of spawnable item classes; class-watch tracking technique for the marker API and the soft-dependency mechanism (`#ifdef` define) for third-party mods.
 
@@ -1283,14 +1476,14 @@ Each phase ends with a working, deployable state.
 * Config/products/site repo (remote URL), `dzo steam login`, product install/update into generations,
   mod add/update into generations, pristine missions from git + one-time init, render pipeline with all merge strategies
   and the **in-place apply with manifest/drift/snapshots**, serverDZ.cfg and BE handling, quadlet generation with
-  **working health checks**, start/stop/restart/status/logs, graceful restart via RCon.
+  **working health checks**, start/stop/restart/status/logs, **built-in RCon client** (§C8) + graceful restart.
 * Minimal `dzo-exporter` (`/metrics`, `/status`) + `dzo check remote`, so the instance can be monitored from day one.
 * Acceptance: golden tests are green for all five configs; one instance (suggest **hashima**, smallest) runs
   in parallel to production on other ports with a **copy** of its mission; kill/hang tests prove health → restart works.
 
 ### Phase 2 — Automation, monitoring, packaging, migration
 * Update engine with policies and timers (hourly check), per-instance maintenance restart timers, GC, rollback pins,
-  log rotation/crash summary, backup/restore, hooks (+ traderstocks/weather as hooks).
+  log rotation/crash summary, **pre-change backups/snapshots incl. before automatic mod updates (§C20)** + restore, hooks (+ traderstocks/weather as hooks).
 * `dzo-exporter` complete (`/metrics`, `/status`, auth/TLS), remote Icinga checks + shipped CheckCommands; Discord notifications (default + per-server webhooks).
 * Debian package (§C14) built in both CIs as an artifact, and `dzo setup`.
 * `dzo import legacy` for each branch: generates `instances/<name>/`, splits `files/mods` into shared
@@ -1347,7 +1540,7 @@ Each phase ends with a working, deployable state.
 
 **Still open**
 
-* none right now. New questions come from the Phase 0 spikes.
+* **Q21** Steam Guard type of the dedicated account (e-mail code or mobile authenticator/app confirmation)? Should dzo ever hold a TOTP secret for fully unattended logins (not recommended), or should the password be stored encrypted (`steam.store_password`)?
 
 **Risks**
 
@@ -1355,6 +1548,8 @@ Each phase ends with a working, deployable state.
 * R2 `xmlmerge` semantics are subtly different from ours, which would cause gameplay differences. Mitigated by the golden tests (S0/S3).
 * R3 `dzce` is v0.x with breaking changes. Mitigation: wrapper, pinning, own fallback.
 * R4 steamcmd flakiness (timeouts on large mods, "Success" parsing). Mitigation: retries, per-item verification via `meta.cpp` + size, jobs are resumable.
+* R4a **Steam authentication needs a human**: password + Steam Guard (e-mail/mobile code or app confirmation), and cached sessions expire unpredictably. Updates stall until someone logs in again. Mitigations: interactive pty-driven login in the CLI and web, early detection by a proactive probe, pause (not fail) of the update pipeline, Discord/Icinga/metrics alerts, no automatic password retries (lockout protection), optional encrypted password storage (§C7).
+* R4b Steam changes steamcmd prompts or the login flow. Mitigation: prompt patterns in one place with fixtures, a `--passthrough` raw terminal fallback, and an alert on unknown output.
 * R5 Load-order changes during migration (legacy order was effectively random). Mitigation: import the current running `-mod=` line from `/tmp/mod_command_line` of the live containers.
 * R6 **Mission data loss** is the worst case. Mitigations: never delete unmanaged paths, snapshot before every apply, validation in staging before touching live, full backup before import/reinit, and golden + property tests ("render never touches paths outside the manifest").
 * R8 A mod or the game rewrites a file that ships in the mission repo, so every render produces "drift" and overwrites runtime data. Mitigations: drift is always backed up + notified, recurring drift on the same file suggests adding it to `mission.unmanaged`, and the importer seeds `unmanaged` from the S2 inventory.
@@ -1362,5 +1557,5 @@ Each phase ends with a working, deployable state.
 
 **Assumptions**
 
-* One host for now, x86_64, Debian trixie, systemd user session for `dayz`, podman ≥ 5 with quadlet `.build` support.
+* One host for now, x86_64, Debian trixie (podman 5.4.2, systemd 257), systemd user session for `dayz`.
 * The five servers keep their current ports.
