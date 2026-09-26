@@ -30,6 +30,8 @@ func newRootCmd() *cobra.Command {
 		newConfigCmd(),
 		newServerCfgCmd(),
 		newRconCmd(),
+		newCacheCmd(),
+		newQuadletCmd(),
 	)
 	return root
 }

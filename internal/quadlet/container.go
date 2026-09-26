@@ -1,0 +1,217 @@
+// SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+// Package quadlet renders podman quadlet unit files (§C4/§C5): dzo
+// generates these itself rather than relying on `podman generate systemd`
+// (deprecated, A8#12) or the `podman quadlet` management CLI (newer than
+// the podman 5.4.2 baseline, §C0). Only the keys the plan lists as
+// verified on 5.4 are used.
+package quadlet
+
+import (
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// Network selects how a container's ports reach the host (D6).
+type Network string
+
+const (
+	NetworkHost    Network = "host"
+	NetworkPublish Network = "publish"
+)
+
+// Port is one published port mapping, used only when Network is "publish".
+type Port struct {
+	HostPort      int
+	ContainerPort int
+	Protocol      string // "tcp" or "udp"; empty defaults to tcp
+}
+
+// Volume is one bind mount or named volume, "host:container[:ro]".
+type Volume struct {
+	Source      string
+	Destination string
+	ReadOnly    bool
+}
+
+// Health describes the container's startup/liveness probe (FR-18, D18).
+type Health struct {
+	Cmd         string
+	Interval    time.Duration
+	StartPeriod time.Duration
+	Retries     int
+	OnFailure   string // e.g. "kill"; empty omits HealthOnFailure
+}
+
+// ContainerSpec is dzo's input to render one instance's .container quadlet.
+// It intentionally does not depend on the site repo's instance.yaml schema
+// (§C3, a later phase): callers translate their own config into this
+// smaller, stable shape.
+type ContainerSpec struct {
+	Name        string // quadlet unit name, e.g. "dzo-deerisle"
+	Description string
+	Image       string
+
+	Network Network
+	Ports   []Port // only used when Network == NetworkPublish
+
+	Volumes     []Volume
+	Environment map[string]string
+	Exec        []string // extra arguments appended after the image
+
+	Health Health
+
+	Memory string // e.g. "24G"; empty omits Memory
+	CPUs   string // e.g. "4"; empty omits CPUs
+
+	StopTimeout time.Duration // 0 omits ContainerStopTimeout
+}
+
+// Validate checks the invariants RenderContainer relies on.
+func (s ContainerSpec) Validate() error {
+	if s.Name == "" {
+		return fmt.Errorf("quadlet: Name is required")
+	}
+	if s.Image == "" {
+		return fmt.Errorf("quadlet: Image is required")
+	}
+	if s.Network != NetworkHost && s.Network != NetworkPublish {
+		return fmt.Errorf("quadlet: Network must be %q or %q, got %q", NetworkHost, NetworkPublish, s.Network)
+	}
+	for _, v := range s.Volumes {
+		if v.Source == "" || v.Destination == "" {
+			return fmt.Errorf("quadlet: volume with an empty source or destination: %+v", v)
+		}
+	}
+	return nil
+}
+
+// RenderContainer renders a systemd quadlet .container unit for spec.
+// Output is deterministic (map iteration is sorted) so repeated renders of
+// the same spec produce byte-identical files.
+func RenderContainer(spec ContainerSpec) (string, error) {
+	if err := spec.Validate(); err != nil {
+		return "", err
+	}
+
+	var b strings.Builder
+	writeSection(&b, "Unit", func(kv *kvWriter) {
+		if spec.Description != "" {
+			kv.set("Description", spec.Description)
+		}
+	})
+
+	writeSection(&b, "Container", func(kv *kvWriter) {
+		kv.set("Image", spec.Image)
+		kv.set("ContainerName", spec.Name)
+
+		switch spec.Network {
+		case NetworkHost:
+			kv.set("Network", "host")
+		case NetworkPublish:
+			for _, p := range spec.Ports {
+				proto := p.Protocol
+				if proto == "" {
+					proto = "tcp"
+				}
+				kv.set("PublishPort", fmt.Sprintf("%d:%d/%s", p.HostPort, p.ContainerPort, proto))
+			}
+		}
+
+		volumes := append([]Volume(nil), spec.Volumes...)
+		for _, v := range volumes {
+			val := v.Source + ":" + v.Destination
+			if v.ReadOnly {
+				val += ":ro"
+			}
+			kv.set("Volume", val)
+		}
+
+		envKeys := make([]string, 0, len(spec.Environment))
+		for k := range spec.Environment {
+			envKeys = append(envKeys, k)
+		}
+		sort.Strings(envKeys)
+		for _, k := range envKeys {
+			kv.set("Environment", k+"="+spec.Environment[k])
+		}
+
+		for _, arg := range spec.Exec {
+			kv.set("Exec", arg)
+		}
+
+		if spec.Health.Cmd != "" {
+			kv.set("HealthCmd", spec.Health.Cmd)
+			if spec.Health.Interval > 0 {
+				kv.set("HealthInterval", formatDuration(spec.Health.Interval))
+			}
+			if spec.Health.StartPeriod > 0 {
+				kv.set("HealthStartupTimeout", formatDuration(spec.Health.StartPeriod))
+			}
+			if spec.Health.Retries > 0 {
+				kv.set("HealthRetries", strconv.Itoa(spec.Health.Retries))
+			}
+			if spec.Health.OnFailure != "" {
+				kv.set("HealthOnFailure", spec.Health.OnFailure)
+			}
+		}
+
+		if spec.Memory != "" {
+			kv.set("PodmanArgs", "--memory="+spec.Memory)
+		}
+		if spec.CPUs != "" {
+			kv.set("PodmanArgs", "--cpus="+spec.CPUs)
+		}
+		if spec.StopTimeout > 0 {
+			kv.set("ContainerStopTimeout", formatDuration(spec.StopTimeout))
+		}
+	})
+
+	writeSection(&b, "Service", func(kv *kvWriter) {
+		kv.set("Restart", "always")
+	})
+
+	writeSection(&b, "Install", func(kv *kvWriter) {
+		kv.set("WantedBy", "default.target")
+	})
+
+	return b.String(), nil
+}
+
+// formatDuration renders d the way systemd time spans expect (e.g. "45m",
+// "60s"), always as a single unit for the values dzo uses (seconds up to a
+// few hours).
+func formatDuration(d time.Duration) string {
+	if d%time.Hour == 0 {
+		return fmt.Sprintf("%dh", int64(d/time.Hour))
+	}
+	if d%time.Minute == 0 {
+		return fmt.Sprintf("%dm", int64(d/time.Minute))
+	}
+	return fmt.Sprintf("%ds", int64(d/time.Second))
+}
+
+type kvWriter struct {
+	b *strings.Builder
+}
+
+func (w *kvWriter) set(key, value string) {
+	fmt.Fprintf(w.b, "%s=%s\n", key, value)
+}
+
+func writeSection(b *strings.Builder, name string, fill func(kv *kvWriter)) {
+	var section strings.Builder
+	fill(&kvWriter{b: &section})
+	if section.Len() == 0 {
+		return
+	}
+	if b.Len() > 0 {
+		b.WriteString("\n")
+	}
+	fmt.Fprintf(b, "[%s]\n", name)
+	b.WriteString(section.String())
+}
