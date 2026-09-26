@@ -24,7 +24,7 @@ Legacy source analysed: `../dayzdockerserver` (branches `main`, `chernarus`, `li
 | D4 | Configuration | **Tool repo (this one) + separate "site" config repo** holding shared mod integrations and `instances/<name>/`. No more branch-per-server. |
 | D5 | Mission preparation | **Runs on the host in the operator**, which renders the mission/profile into the instance directory. The runtime image stays dumb (it only execs `DayZServer`). |
 | D6 | Networking | **`Network=host` by default**, per-instance override to published ports (pasta). |
-| D7 | Updates | **Fully automatic, policy per instance** (`auto` / `notify` / `manual`), triggered by systemd timers. |
+| D7 | Updates | **Mod updates: fully automatic, policy per instance** (`auto` / `notify` / `manual`), triggered by systemd timers. **Server (product) builds: never automatic.** dzo only detects and reports a new build. Downloading it and switching instances to it is always a manual step, because a new game version often needs a wipe, new or updated mods, or other changes. **No rollback of downloads:** a correctly downloaded broken mod or build needs a fix, not an older version. What dzo provides is a **forced re-download** of a mod (`dzo mod refresh`), also for a corrupted steamcmd cache (§C7). |
 | D8 | RCon / restarts | Reimplemented natively. **Never rely on `#shutdown`** (it hangs DayZ, deerisle). Restart = countdown → lock → kick (with retries) → `systemctl --user restart`. |
 | D9 | Low-level hacks | LD_PRELOAD (`fix_dayz.so`) no longer needed, but the instance model must keep **generic hooks for extra env / mounts / preload** in case such a workaround is needed again. |
 | D10 | Node.js | **Excluded.** The legacy Vue/Express web code is ignored; only its *ideas* (mod search, XML editor, status) inform later phases. |
@@ -257,7 +257,7 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 10. The healthcheck via RCon causes restart loops when RCon is flaky (disabled on deerisle).
 11. Every server downloads its own ~3 GB server + mods; `serverfiles/keys` is shared state mutated at start.
 12. `podman generate systemd` is deprecated; `dzpodman stop` deletes the unit files.
-13. Server update and mod update are all-or-nothing, and no rollback is possible.
+13. Server update and mod update are coupled (`update` also runs `modupdate`), so a server update is never a separate, deliberate step.
 14. Dead commands (`rcon`, `add` in server), the hard-coded unit name `container-deerisle-server` in restart_extern.
 
 ---
@@ -288,7 +288,9 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 | FR-15 | **Graceful restart**: announcements (schedule A4), lock, kick with retries + `#kick -1`, post-kick delay, then restart via systemd; custom message prefix (e.g. "MOD UPDATE!") | dayz_restart |
 | FR-16 | Scheduled maintenance restarts per instance (typically every 3–4 h, times vary per server) | cron |
 | FR-16a | Scheduled in-game messages via RCon (later phase; `messages.xml` covers the basics) | cron |
-| FR-17 | Automatic update pipeline: detect (mods: hourly by default) → download → restart affected instances gracefully, per-instance policy | cron + mod_update_run |
+| FR-17 | Automatic **mod** update pipeline: detect (hourly by default) → download → restart affected instances gracefully, per-instance policy. **Server builds are only detected and reported, never downloaded or applied automatically** | cron + mod_update_run |
+| FR-17a | **Forced mod refresh**: discard the cached copy and steamcmd's state for one, several or all mods and download them again, even if Steam reports no change (broken downloads, a bugged Steam/steamcmd cache); then apply like a normal mod update | forceupdate / mi |
+| FR-17b | **Manual server upgrade** per instance: download the new product build on request, then switch selected instances with an explicit command that can include a storage wipe and mod/config changes, after a snapshot | install/update |
 | FR-18 | **Working container health checks** (startup + liveness) with restart-on-failure that does not flap | healthcheck |
 | FR-18a | **Icinga** checks (Nagios plugin API) for each instance and for global state (updates, steam session, disk) | – |
 | FR-18b | **Discord** notifications (webhook) for updates, restarts, crashes, health changes, failed renders/jobs | – |
@@ -319,7 +321,7 @@ fully per-server. So the new model needs **shared integrations + per-instance ov
 
 * NFR-01 Rootless podman, quadlets only, `loginctl enable-linger` for the service user.
 * NFR-02 Deterministic, idempotent rendering; dry-run and diff against the live mission; per-file atomic writes; never delete files the operator does not own.
-* NFR-03 Shared downloads with **immutable generations** so updating never changes files under a running server, and rollback is possible.
+* NFR-03 Shared downloads with **immutable generations** so an update or a forced re-download never changes files under a running server.
 * NFR-04 No Node.js. Single-binary deployment, **packaged as a Debian package**.
 * NFR-05 Library-first architecture: CLI, timers and the later web UI/API share one core.
 * NFR-06 Secrets (Steam session, RCon passwords, web users) are never in git and have 0600 permissions.
@@ -764,16 +766,17 @@ if its launch or config model differs, a new **product driver** in code (an inte
 `RenderConfig`, `HealthProbe`, `RCon`). Each instance references exactly one product. Pristine missions are per instance anyway.
 
 * **Steam authentication**, see below. After a successful login the session is reused by all download jobs.
-* Server build per product: `app_info_print` build id vs `cache/products/<product>/current`. On change: steamcmd
-  `app_update validate` into `cache/steamcmd/<product>`, then snapshot (reflink) into `<buildid>/`.
+* Server build per product: `app_info_print` build id vs the newest downloaded build. A new build is **only detected and reported**
+  (Discord, `dzo_product_update_available{product,buildid}`, `dzo check remote --updates` → WARNING, status/web). **Nothing is downloaded or
+  switched automatically, ever** (D7). See "Manual server upgrade" below.
 * Mods: freshness via `steam/filedetails` (`time_updated`, **not** local mtime), download with
   `workshop_download_item` (batched, with retry, success parsing per item), then snapshot into `<modid>/<time_updated>/`.
   Mods are shared between products if the workshop app is the same.
 * Name resolution from `meta.cpp` in the generation. The name is stored in a lock file for a stable `@Name`.
 * **Update job** (`dzo update check --apply`, hourly timer by default):
-  1. Determine new server builds (per product in use) and mod generations, for the instances whose `check_interval` is due.
-  2. Download + snapshot (servers keep running; nothing mounted changes).
-  3. Map affected instances (a product build affects all instances of that product; mod X affects instances using X).
+  1. Determine new mod generations for the instances whose `check_interval` is due, and new server builds (report only, see above).
+  2. Download + snapshot the mods (servers keep running; nothing mounted changes).
+  3. Map affected instances (mod X affects the instances using X).
   4. Per affected instance and policy: `auto` → graceful restart with the update announcement, running **stop → btrfs snapshot (§C20)
      → switch generation (re-render + regenerated quadlet) → start**; if the snapshot fails with policy `abort`, the instance restarts on the old generation and an alert is sent; `notify` → record + notify; `manual` → record.
   5. Garbage-collect generations not referenced by any instance and older than N days.
@@ -789,9 +792,26 @@ if its launch or config model differs, a new **product driver** in code (an inte
     apply_with_scheduled_restart: true      # if a maintenance restart is due within N h, just use it instead of an extra restart
     max_delay: 12h                          # upper bound: then apply even outside the window (announced)
   ```
-  A server update (new product build) that clients need can bypass the windows (`urgent_on_server_update: true`, default), since clients
-  cannot join an outdated server anyway. All pending updates of an instance are applied in **one** stop → snapshot → switch → start cycle.
-* Rollback: `dzo instance pin <name> --mod <id>@<gen>` / `--build <buildid>`.
+  All pending mod updates of an instance are applied in **one** stop → snapshot → switch → start cycle.
+* **No rollback of downloads.** If a mod was downloaded correctly and is broken, the mod needs a fix (by its author, or by removing it from the
+  instance). An older generation is not offered as a remedy. Generations only exist so that running servers never see files change underneath them. Unreferenced generations are garbage-collected.
+* **Forced mod refresh** (`dzo mod refresh <id…> | --all [--instance <name>] [--no-restart]`): for broken or incomplete downloads and a
+  bugged Steam/steamcmd cache (it has happened that Steam kept serving a bad copy). dzo:
+  1. deletes steamcmd's state for the item (`steamapps/workshop/content/221100/<id>`, its `downloads/` and `temp/` leftovers, and the item's entry
+     in `appworkshop_221100.acf`) in the steamcmd work dir, never in a cache generation;
+  2. downloads it again with `workshop_download_item … validate`, even if `time_updated` is unchanged;
+  3. verifies the result (`meta.cpp` present, every PBO parses, size plausible vs. `filedetails.file_size`);
+  4. stores it as a **new generation** (`<modid>/<time_updated>-r<n>/`, since the old one may be referenced by a running server);
+  5. applies it to the affected instances like a normal mod update (policy, announcement, snapshot), or only at the next restart with `--no-restart`.
+  The web UI offers the same as a button per mod. More elaborate recovery (e.g. a full steamcmd reset) is not automated. `dzo steam reset-cache`
+  just wipes the steamcmd work dir after confirmation, and the next download fills it again.
+* **Manual server upgrade** (never automatic, D7):
+  1. `dzo product update <product>` downloads the new build (`app_update validate` into `cache/steamcmd/<product>`, then a reflink snapshot into
+     `<buildid>/`). Running servers are not affected. `--force` re-validates and re-snapshots the current build (the equivalent of the forced mod refresh for the server).
+  2. The admin prepares what the new version needs: mod updates or new mods, config changes in the site repo, and a wipe decision.
+  3. `dzo instance upgrade <name> --build <buildid> [--wipe] [--dry-run]` runs stop → snapshot (`update` trigger, plus `destructive` if `--wipe`)
+     → optional wipe (§C11) → switch to the build → render → start, announced like any restart. `--dry-run` shows the render plan and
+     the dependency check against the new build first. Each instance is upgraded separately; nothing forces all instances of a product to switch at once.
 * **Mod dependencies instead of load order:** DayZ does not (yet) honour the `-mod=` order in a reliable way. What actually decides loading is each
   addon's `CfgPatches` `requiredAddons`, and for mod developers the effective order is chaotic anyway. dzo therefore reads the (rapified)
   `config.bin`/`config.cpp` `CfgPatches` from each mod generation's PBOs (with the `pbo` lib plus a config parser) and:
@@ -839,8 +859,8 @@ dzo must therefore treat Steam auth as an **interactive, recurring operator task
   * `dzo steam status` shows account, last successful login, last successful download, and current state.
 * **Lockout protection:** a failed password/code is never retried automatically. Steam rate limits are respected with exponential backoff and
   a clear "rate limited until …" state, so automatic retries can never lock the account.
-* **Proactive check:** a cheap periodic probe (part of the hourly update check: `+login` with cached credentials + `+quit`) detects expiry before an
-  urgent update is needed, so an admin can re-authenticate at a convenient time.
+* **Proactive check:** a cheap periodic probe (part of the hourly update check: `+login` with cached credentials + `+quit`) detects expiry before the
+  next download needs it, so an admin can re-authenticate at a convenient time.
 * **Tests:** a scripted fake steamcmd (pty) reproduces all prompt/failure variants, so the state machine, the CLI and web flows and the pause/resume logic
   are covered without real credentials (and count toward the 85 %).
 
@@ -944,7 +964,7 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 * `/etc/dzo/config.yaml` defines a **default webhook** and optional **named webhooks**. URLs are stored in `secrets/`.
 * Each instance uses the default unless `notify.discord` lists other targets (it can list several; `[]` disables).
   Per target, an event filter (e.g. restarts → public channel; drift, render and job failures → admin channel).
-* Events: update detected/downloaded/applied, restart scheduled/started/finished, health unhealthy/recovered, crash loop,
+* Events: mod update detected/downloaded/applied, **server build available** (manual action needed), mod refresh result, restart scheduled/started/finished, health unhealthy/recovered, crash loop,
   render/validation failed, drift detected, **steam login required / session expired** (with reminders), job failed.
 * Rate limiting + coalescing (e.g. one message for "12 mods updated, 3 servers restarting"). Templated messages (Go templates) per event.
 * A `Notifier` interface, so mail/Matrix/etc. can be added later. `dzo notify test [--target x]`.
@@ -965,7 +985,8 @@ Icinga runs on another host, so everything is reachable over the network. No loc
 | `dzpodman logs` | `dzo logs <name> [-f]` (journal) |
 | `dzpodman exec/run` | `dzo shell <name>` (debug container with the same mounts), `dzo exec <name> …` |
 | `dz login` | `dzo steam login [--user] [--passthrough]`, `dzo steam status` (interactive: password + Steam Guard code or app confirmation) |
-| `dz install / update / forceupdate` | `dzo product install <product>`, `dzo update check [--apply] [--force]` |
+| `dz install / update / forceupdate` | `dzo product install/update <product> [--force]` (manual only), `dzo instance upgrade <name> --build <id> [--wipe]`, `dzo update check [--apply]` (mods; server builds report only) |
+| `dz mi <ids…>` (force) | `dzo mod refresh <id…> \| --all [--instance x] [--no-restart]`, `dzo steam reset-cache` |
 | `dz add / remove / m / mi` | `dzo mod add <id> [--instance x --server]`, `dzo mod remove`, `dzo mod update [ids…]` |
 | `dz map` | `dzo mission init/update/status/rollback/reinit <name>` (pristine fetch, one-time init, in-place update, snapshots) |
 | `dz xml` | `dzo integration check <modid>` (fetch, normalise, validate, show diffs) |
@@ -1271,7 +1292,7 @@ overlap). It validates them for consistency across all tiles and fails loudly on
   **extracted only once** and shared by all instances using it. Unchanged maps are never re-extracted, not even after a dzo restart or reinstall of an instance.
 * An **index** (DB) per map: source (product build or mod generation + PBO path), hash, generator version, built_at, size, state
   (`building` / `ready` / `failed` / `stale`), and which tile set is currently served.
-* **Automatic rebuild** (`map_tiles.auto_rebuild: true`, default): when the update engine installs a new mod generation or product build whose map PBO
+* **Automatic rebuild** (`map_tiles.auto_rebuild: true`, default): when a new mod generation (update engine) or product build (manual `dzo product update`) is installed whose map PBO
   hash differs, a background build is queued (`post_download`). The old tile set keeps being served until the new one is `ready`, then it switches atomically.
 * **On request:** `dzo map tiles status [<map>]` shows source, hash, age and whether the current game files differ (`stale`).
   `dzo map tiles update <map|instance>` rebuilds from the **current game files** (the PBO of the active generation), and `--force` rebuilds even with
@@ -1482,13 +1503,13 @@ that is what keeps it simple.
 * The **database** is backed up separately: SQLite via `VACUUM INTO` (consistent online copy) into `${paths.snapshots}/_db/<timestamp>.sqlite`,
   PostgreSQL via `pg_dump` (if the local server is used). This runs before DB migrations and daily, with the same retention mechanism.
   ClickHouse is not backed up by dzo (it is analytics data, and the stack owner handles it).
-* Download cache generations are immutable and not snapshotted. A rollback pins the old generation (§C7).
+* Download cache generations are immutable and not snapshotted (they can be downloaded again; §C7 forced refresh).
 
 ### When snapshots are taken
 
 | Trigger | When | Default |
 |---|---|---|
-| `update` | before an instance switches to a new product build | on |
+| `update` | before `dzo instance upgrade` switches an instance to a new product build (manual) | on |
 | `mod_update` | before new mod generations are applied, **incl. the automatic hourly update pipeline** | on |
 | `mission_update` | before pristine mission changes are applied | on |
 | `config_change` | before site repo changes (instance.yaml, overlays, serverDZ.cfg) are applied | on |
@@ -1684,7 +1705,7 @@ and the complete `profiles/` logs copied to `--out <dir>` (default `./boottest-<
   self-hosted runner with a pre-installed server (`DZO_BOOTTEST_SERVER_DIR`) boots the example configs. The runner is a dedicated test machine
   with no game servers. The job is skipped when the runner is absent.
 * **Not on production hosts:** no boot test before updates or restarts. A mod update that breaks scripts is caught by the health checks and the
-  restart-storm protection (§C5), and rolled back via generation pins (§C7). Changes made by hand (integrations, overlays) are boot-tested on a developer machine before they are pushed to the site repo.
+  restart-storm protection (§C5), and fixed with a forced refresh or by removing the mod (§C7). Changes made by hand (integrations, overlays) are boot-tested on a developer machine before they are pushed to the site repo.
 
 ---
 
@@ -1774,7 +1795,7 @@ Each phase ends with a working, deployable state.
   in parallel to production on other ports with a **copy** of its mission; kill/hang tests prove health → restart works.
 
 ### Phase 2 — Automation, monitoring, packaging, migration
-* Update engine with policies and timers (hourly check), per-instance maintenance restart timers, GC, rollback pins,
+* Mod update engine with policies and timers (hourly check), forced mod refresh, server build detection + notification and the manual `product update`/`instance upgrade` flow, per-instance maintenance restart timers, GC,
   log rotation/crash summary, **btrfs snapshot backups incl. before automatic mod updates, retention/cleanup, restore (§C20)**, hooks (+ traderstocks/weather as hooks).
 * `dzo-exporter` complete (`/metrics`, `/status`, auth/TLS), remote Icinga checks + shipped CheckCommands; Discord notifications (default + per-server webhooks).
 * Debian package (§C14) built in both CIs as an artifact, and `dzo setup`.
@@ -1847,7 +1868,7 @@ Each phase ends with a working, deployable state.
 * R9 **btrfs is required** for instance data. Hosts without btrfs need a btrfs data volume (partition/LV, or loopback image as a stop-gap). Unprivileged snapshot deletion without `user_subvol_rm_allowed` is slow for big trees. Mitigation: `dzo setup` checks and recommends the mount option, and the deletion fallback is tested in CI.
 * R10 **Boot tests give false confidence or cost too much.** A headless boot cannot cover player-driven code (actions, inventory, damage), real
   clients, networking or BattlEye, and some errors only appear under load or after hours. Reports say what was *not* covered. Automatic mod updates
-  on production are not boot-tested, because a real server never runs next to live servers. There, the health checks, restart-storm protection and generation rollback remain the safety net.
+  on production are not boot-tested, because a real server never runs next to live servers. There, the health checks and restart-storm protection remain the safety net, and a fix means a forced mod refresh or removing the mod (§C7).
 
 **Assumptions**
 
@@ -1869,7 +1890,7 @@ Each phase ends with a working, deployable state.
 | 3.4 | `network-online` deps in a user quadlet | **Fixed:** removed from the sketch (quadlet injects the rootless wait unit). |
 | 3.5 | A2S challenge handshake / readiness | **Fixed:** noted in §C9 and the probe timeout. |
 | 3.6 | `ban.txt` format | **Adopted:** to be verified in S4 before implementation (§C18). |
-| 3.7 | Update debouncing/windows | **Fixed:** windows, quiet hours, `min_restart_interval`, `batch_delay`, piggy-backing on maintenance restarts, `max_delay`, urgent server updates (§C7). |
+| 3.7 | Update debouncing/windows | **Fixed:** windows, quiet hours, `min_restart_interval`, `batch_delay`, piggy-backing on maintenance restarts, `max_delay` (§C7). Server builds are no longer applied automatically at all (D7). |
 | 3.8 | "snapshots" naming collision | **Fixed:** per-file copies renamed to `filehistory/` (`mission.keep_file_history`). |
 | 3.9 | Tile URL hashing | **Fixed:** hash in the tile path, `metadata.json` with ETag points to the current hash (§C17). |
 | 3.10 | Migration diff→overlay | **Obsolete:** no data migration at all; servers start fresh, and only the config is converted into a reviewed example (§C21, D32). |
