@@ -33,6 +33,7 @@ func newRootCmd() *cobra.Command {
 		newCacheCmd(),
 		newQuadletCmd(),
 		newHealthCmd(),
+		newNotifyCmd(),
 	)
 	return root
 }
