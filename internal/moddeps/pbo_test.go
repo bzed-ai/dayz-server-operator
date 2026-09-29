@@ -146,20 +146,6 @@ func TestOpenPBOFindMissing(t *testing.T) {
 	}
 }
 
-func TestReadEntryCompressedReturnsError(t *testing.T) {
-	data := buildPBO(t, false, []pboEntry{
-		{name: "config.bin", packing: packingCompressed, data: []byte("fake-compressed-bytes"), original: 1000},
-	})
-	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatalf("OpenPBO: %v", err)
-	}
-	entry, _ := pbo.Find("config.bin")
-	if _, err := pbo.ReadEntry(entry); err != ErrCompressedEntry {
-		t.Errorf("err = %v, want ErrCompressedEntry", err)
-	}
-}
-
 func TestOpenPBOTruncatedDataErrors(t *testing.T) {
 	if _, err := OpenPBO([]byte{1, 2, 3}); err == nil {
 		t.Fatal("expected an error for truncated/invalid PBO data")

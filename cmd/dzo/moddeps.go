@@ -13,23 +13,22 @@ import (
 	"github.com/bzed-ai/dayz-server-operator/internal/moddeps"
 )
 
-// loadPatches reads path as a config.cpp source, or - if it ends in
-// ".pbo" - opens it as a PBO archive and extracts its "config.cpp" entry
-// (real mod PBOs almost always ship a rapified config.bin instead, which
-// this package cannot decode yet - see internal/moddeps's doc comment).
+// loadPatches reads path as a config.cpp source or a rapified config.bin,
+// or - if it ends in ".pbo" - opens it as a PBO archive and reads its
+// config.bin (falling back to config.cpp).
 func loadPatches(path string) ([]moddeps.Patch, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // path is an operator-supplied CLI argument, not external input
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 	if !strings.HasSuffix(path, ".pbo") {
-		return moddeps.ExtractPatchesFromConfigCpp(data)
+		return moddeps.ExtractPatchesFromConfig(data)
 	}
 	pbo, err := moddeps.OpenPBO(data)
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	return moddeps.ExtractPatchesFromPBO(pbo, "config.cpp")
+	return moddeps.ExtractPatchesFromPBO(pbo)
 }
 
 func newModCfgPatchesCmd() *cobra.Command {

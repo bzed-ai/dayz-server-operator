@@ -24,6 +24,23 @@ that every required addon is present. A missing dependency stops the start with
 a clear message instead of a crash loop. ``dzo mod deps deerisle`` shows the
 dependency graph.
 
+Reading ``config.bin``
+~~~~~~~~~~~~~~~~~~~~~~
+
+Mods ship their config as a rapified (binary) ``config.bin``, usually inside
+an LZSS-compressed PBO entry. dzo decodes both itself, so no extra tools are
+needed: it looks for ``config.bin`` at the root of each addon PBO (falling back
+to a plain ``config.cpp``) and reads only the ``CfgPatches`` classes and their
+``requiredAddons``. The diagnostic commands accept a PBO, a bare
+``config.bin`` or a ``config.cpp``::
+
+   dzo mod cfgpatches @MyMod/addons/mymod.pbo
+   dzo mod deps @MyMod/addons/mymod.pbo --provides DZ_Data,DZ_Scripts --order
+
+Corrupt or truncated files produce an error naming the problem rather than a
+guess. The decoder has been checked against synthetic files only; report a mod
+whose ``config.bin`` it cannot read.
+
 Automatic mod updates
 ---------------------
 

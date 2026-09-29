@@ -82,3 +82,50 @@ func TestModDepsCmdMissingFile(t *testing.T) {
 		t.Fatal("expected an error for a missing file")
 	}
 }
+
+func leU32(v int) []byte { return []byte{byte(v), byte(v >> 8), byte(v >> 16), byte(v >> 24)} }
+
+// minimalPBO packs one uncompressed entry into a PBO: header record,
+// terminating zero record, data.
+func minimalPBO(name string, data []byte) []byte {
+	out := append([]byte(name), 0)
+	out = append(out, leU32(0)...)
+	out = append(out, leU32(len(data))...)
+	out = append(out, leU32(0)...)
+	out = append(out, leU32(0)...)
+	out = append(out, leU32(len(data))...)
+	out = append(out, make([]byte, 21)...)
+	return append(out, data...)
+}
+
+// rapifiedPatches is a hand-assembled config.bin:
+// CfgPatches { M { requiredAddons[] = {"A"}; }; }.
+func rapifiedPatches() []byte {
+	bin := []byte{0, 'r', 'a', 'P', 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0}
+	bin = append(bin, 0, 1, 0) // root: no parent, 1 entry, type class
+	bin = append(bin, "CfgPatches\x00"...)
+	bin = append(bin, leU32(34)...)    // body offset
+	bin = append(bin, 0, 1, 0, 'M', 0) // CfgPatches body: 1 class "M"
+	bin = append(bin, leU32(43)...)    // body offset
+	bin = append(bin, 0, 1, 2)         // M body: no parent, 1 entry, type array
+	bin = append(bin, "requiredAddons\x00"...)
+	return append(bin, 1, 0, 'A', 0)
+}
+
+func TestModCfgPatchesCmdPBOWithConfigBin(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mod.pbo")
+	if err := os.WriteFile(path, minimalPBO("config.bin", rapifiedPatches()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runCmd(t, "mod", "cfgpatches", path)
+	if err != nil {
+		t.Fatalf("mod cfgpatches: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "M requires [A]") {
+		t.Errorf("output = %q", out)
+	}
+	out, err = runCmd(t, "mod", "deps", path, "--provides", "A")
+	if err != nil {
+		t.Fatalf("mod deps: %v\n%s", err, out)
+	}
+}

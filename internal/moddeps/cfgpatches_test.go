@@ -5,16 +5,16 @@ package moddeps
 
 import "testing"
 
-func TestExtractPatchesFromConfigCpp(t *testing.T) {
+func TestExtractPatchesFromConfig(t *testing.T) {
 	src := `
 class CfgPatches {
 	class ModA { requiredAddons[] = {"DZ_Data"}; };
 	class ModB { requiredAddons[] = {"DZ_Data", "ModA"}; };
 };
 `
-	patches, err := ExtractPatchesFromConfigCpp([]byte(src))
+	patches, err := ExtractPatchesFromConfig([]byte(src))
 	if err != nil {
-		t.Fatalf("ExtractPatchesFromConfigCpp: %v", err)
+		t.Fatalf("ExtractPatchesFromConfig: %v", err)
 	}
 	if len(patches) != 2 {
 		t.Fatalf("patches = %d, want 2", len(patches))
@@ -29,9 +29,9 @@ class CfgPatches {
 }
 
 func TestExtractPatchesNoCfgPatches(t *testing.T) {
-	patches, err := ExtractPatchesFromConfigCpp([]byte(`class Something { x = 1; };`))
+	patches, err := ExtractPatchesFromConfig([]byte(`class Something { x = 1; };`))
 	if err != nil {
-		t.Fatalf("ExtractPatchesFromConfigCpp: %v", err)
+		t.Fatalf("ExtractPatchesFromConfig: %v", err)
 	}
 	if patches != nil {
 		t.Errorf("patches = %v, want nil", patches)
@@ -39,9 +39,9 @@ func TestExtractPatchesNoCfgPatches(t *testing.T) {
 }
 
 func TestExtractPatchesNoRequiredAddons(t *testing.T) {
-	patches, err := ExtractPatchesFromConfigCpp([]byte(`class CfgPatches { class M { units[] = {}; }; };`))
+	patches, err := ExtractPatchesFromConfig([]byte(`class CfgPatches { class M { units[] = {}; }; };`))
 	if err != nil {
-		t.Fatalf("ExtractPatchesFromConfigCpp: %v", err)
+		t.Fatalf("ExtractPatchesFromConfig: %v", err)
 	}
 	if len(patches) != 1 || patches[0].Name != "M" || patches[0].RequiredAddons != nil {
 		t.Errorf("patches = %+v", patches)
@@ -49,14 +49,14 @@ func TestExtractPatchesNoRequiredAddons(t *testing.T) {
 }
 
 func TestExtractPatchesScalarRequiredAddonsErrors(t *testing.T) {
-	_, err := ExtractPatchesFromConfigCpp([]byte(`class CfgPatches { class M { requiredAddons = "not an array"; }; };`))
+	_, err := ExtractPatchesFromConfig([]byte(`class CfgPatches { class M { requiredAddons = "not an array"; }; };`))
 	if err == nil {
 		t.Fatal("expected an error for a non-array requiredAddons")
 	}
 }
 
 func TestExtractPatchesInvalidConfigErrors(t *testing.T) {
-	if _, err := ExtractPatchesFromConfigCpp([]byte(`class {`)); err == nil {
+	if _, err := ExtractPatchesFromConfig([]byte(`class {`)); err == nil {
 		t.Fatal("expected a parse error to propagate")
 	}
 }
@@ -69,7 +69,7 @@ func TestExtractPatchesFromPBO(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenPBO: %v", err)
 	}
-	patches, err := ExtractPatchesFromPBO(pbo, "config.cpp")
+	patches, err := ExtractPatchesFromPBO(pbo)
 	if err != nil {
 		t.Fatalf("ExtractPatchesFromPBO: %v", err)
 	}
@@ -84,20 +84,7 @@ func TestExtractPatchesFromPBOMissingEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenPBO: %v", err)
 	}
-	if _, err := ExtractPatchesFromPBO(pbo, "config.cpp"); err == nil {
+	if _, err := ExtractPatchesFromPBO(pbo); err == nil {
 		t.Fatal("expected an error for a missing config.cpp entry")
-	}
-}
-
-func TestExtractPatchesFromPBOCompressedEntry(t *testing.T) {
-	data := buildPBO(t, false, []pboEntry{
-		{name: "config.bin", packing: packingCompressed, data: []byte("fake"), original: 100},
-	})
-	pbo, err := OpenPBO(data)
-	if err != nil {
-		t.Fatalf("OpenPBO: %v", err)
-	}
-	if _, err := ExtractPatchesFromPBO(pbo, "config.bin"); err != ErrCompressedEntry {
-		t.Errorf("err = %v, want ErrCompressedEntry", err)
 	}
 }

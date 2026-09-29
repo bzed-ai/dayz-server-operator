@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // Entry is one file entry in a PBO's header table.
@@ -21,17 +22,16 @@ type Entry struct {
 
 const packingCompressed = 0x43707273 // "Cprs" read as a little-endian uint32
 
-// ErrCompressedEntry is returned by ReadEntry for a compressed
-// (PackingMethod == "Cprs", LZSS) entry: decompressing it is not
-// implemented (see the package doc comment - no real compressed-PBO
-// fixture is available here to verify a decoder against).
-var ErrCompressedEntry = fmt.Errorf("moddeps: compressed PBO entries are not supported")
+// maxEntrySize bounds a decompressed entry; it stops a corrupt header
+// from requesting a huge allocation.
+const maxEntrySize = 256 << 20
 
 // PBO reads a Bohemia PBO archive's header table lazily; call
 // ReadEntry to fetch one entry's bytes.
 type PBO struct {
 	Entries []Entry
 	r       io.ReaderAt
+	size    int64
 }
 
 // OpenPBO parses data's PBO header table (the "Vers" product-info entry,
@@ -125,29 +125,39 @@ func OpenPBO(data []byte) (*PBO, error) {
 		dataStart += int64(entries[i].DataSize)
 	}
 
-	return &PBO{Entries: entries, r: bytes.NewReader(data)}, nil
+	return &PBO{Entries: entries, r: bytes.NewReader(data), size: int64(len(data))}, nil
 }
 
-// Find returns the entry named name (case-sensitive, matching PBO's own
-// on-disk convention), or false if it is not present.
+// Find returns the entry named name (case-insensitive; "/" and "\" are
+// equivalent, since PBOs mix both), or false if it is not present.
 func (p *PBO) Find(name string) (Entry, bool) {
+	norm := func(s string) string { return strings.ToLower(strings.ReplaceAll(s, `\`, "/")) }
 	for _, e := range p.Entries {
-		if e.Name == name {
+		if norm(e.Name) == norm(name) {
 			return e, true
 		}
 	}
 	return Entry{}, false
 }
 
-// ReadEntry returns e's raw bytes. It returns ErrCompressedEntry for a
-// compressed entry rather than attempting LZSS decompression.
+// ReadEntry returns e's bytes, LZSS-decompressing a "Cprs" entry.
 func (p *PBO) ReadEntry(e Entry) ([]byte, error) {
-	if e.PackingMethod == packingCompressed {
-		return nil, ErrCompressedEntry
+	if e.dataOffset+int64(e.DataSize) > p.size {
+		return nil, fmt.Errorf("moddeps: entry %q extends past the end of the PBO", e.Name)
 	}
 	buf := make([]byte, e.DataSize)
 	if _, err := p.r.ReadAt(buf, e.dataOffset); err != nil {
 		return nil, fmt.Errorf("moddeps: read entry %q: %w", e.Name, err)
 	}
-	return buf, nil
+	if e.PackingMethod != packingCompressed {
+		return buf, nil
+	}
+	if e.OriginalSize > maxEntrySize {
+		return nil, fmt.Errorf("moddeps: entry %q claims %d bytes uncompressed", e.Name, e.OriginalSize)
+	}
+	out, err := decompressLZSS(buf, int(e.OriginalSize))
+	if err != nil {
+		return nil, fmt.Errorf("moddeps: decompress entry %q: %w", e.Name, err)
+	}
+	return out, nil
 }

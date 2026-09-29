@@ -65,7 +65,7 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 | `internal/monitor` | Prometheus `/metrics`, JSON `/status`, and Icinga/Nagios-compatible checks |
 | `internal/steam` | The interactive steamcmd login state machine (pty-driven prompt classifier) and a non-interactive mode for scheduled jobs |
 | `internal/product` | The update-window/batching scheduling decision, a Steam Web API mod-freshness client, and the steamcmd job runner for `+app_update`/`+workshop_download_item` |
-| `internal/moddeps` | CfgPatches `requiredAddons` dependency validation and load-order sorting, from a PBO or a plain-text `config.cpp` |
+| `internal/moddeps` | CfgPatches `requiredAddons` dependency validation and load-order sorting, from a PBO (rapified `config.bin`, LZSS entries) or a plain-text `config.cpp` |
 | `internal/resolve` | Combines `config.yaml`, the site checkout (`site.yaml` defaults + `instance.yaml`) and the cache into one resolved instance, including its quadlet spec; behind `dzo instance show` |
 | `internal/instance` | Ties the above into one instance's lifecycle: the F3 failed-render gate, quadlet+timer materialization, systemd start/stop/restart, and the BattlEye lock/kick graceful-restart sequence |
 | `cmd/dzo` | The CLI wiring all of the above together |
@@ -159,12 +159,12 @@ relying on them, roughly in the order they'd bite:
   prompt wording and the `+app_update`/`+workshop_download_item`
   success/failure lines are reverse-engineered from community reports,
   not exercised against a real account.
-- **Rapified `config.bin` decoding** (`internal/moddeps`): not
-  implemented at all yet. Real mod PBOs almost always ship this binary
-  format rather than a plain-text `config.cpp`, so `dzo mod deps`/
-  `cfgpatches` only works end to end today for the rare mod (or PBO
-  fixture) that ships an unrapified `config.cpp`. Compressed
-  (`Cprs`/LZSS) PBO entries are also not decoded.
+- **Rapified `config.bin` and `Cprs` (LZSS) PBO entries** (`internal/moddeps`):
+  decoders are implemented from published format descriptions and tested
+  only against synthetic fixtures. Verify against a few real workshop mod
+  PBOs (compressed and uncompressed entries, nested arrays, `+=` arrays)
+  with `dzo mod cfgpatches`; the LZSS ring-offset convention is the least
+  certain part.
 - **BattlEye's `players` command output format** (`internal/instance`'s
   graceful-restart kick sequence) and the event message patterns
   (`internal/battleye`'s connect/GUID/chat/kick regexes, spike S4) are

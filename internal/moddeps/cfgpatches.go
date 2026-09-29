@@ -3,7 +3,10 @@
 
 package moddeps
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // Patch is one CfgPatches child class: the name other addons'
 // requiredAddons entries refer to, and what it itself requires.
@@ -36,29 +39,33 @@ func ExtractPatches(root *Class) ([]Patch, error) {
 	return result, nil
 }
 
-// ExtractPatchesFromConfigCpp is a convenience wrapper: parses data as a
-// config.cpp source and extracts its CfgPatches entries in one call.
-func ExtractPatchesFromConfigCpp(data []byte) ([]Patch, error) {
-	root, err := ParseConfig(data)
+// ExtractPatchesFromConfig extracts CfgPatches from data, which is either
+// a rapified config.bin (detected by its magic) or config.cpp source.
+func ExtractPatchesFromConfig(data []byte) ([]Patch, error) {
+	parse := ParseConfig
+	if IsRapified(data) {
+		parse = ParseRapified
+	}
+	root, err := parse(data)
 	if err != nil {
 		return nil, err
 	}
 	return ExtractPatches(root)
 }
 
-// ExtractPatchesFromPBO finds name (conventionally "config.cpp") inside
-// pbo and extracts its CfgPatches entries. It returns an error naming the
-// entry if name is missing, or ErrCompressedEntry if it is a compressed
-// (rapified config.bin-style) entry this package cannot decode (see the
-// package doc comment).
-func ExtractPatchesFromPBO(pbo *PBO, name string) ([]Patch, error) {
-	entry, ok := pbo.Find(name)
+// ExtractPatchesFromPBO reads the PBO's config.bin (or, failing that,
+// config.cpp) and extracts its CfgPatches entries; compressed entries are
+// decompressed transparently.
+func ExtractPatchesFromPBO(pbo *PBO) ([]Patch, error) {
+	entry, ok := pbo.Find("config.bin")
 	if !ok {
-		return nil, fmt.Errorf("moddeps: PBO has no entry named %q", name)
+		if entry, ok = pbo.Find("config.cpp"); !ok {
+			return nil, errors.New("moddeps: PBO has no config.bin or config.cpp entry")
+		}
 	}
 	data, err := pbo.ReadEntry(entry)
 	if err != nil {
 		return nil, err
 	}
-	return ExtractPatchesFromConfigCpp(data)
+	return ExtractPatchesFromConfig(data)
 }
