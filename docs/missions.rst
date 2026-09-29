@@ -65,7 +65,21 @@ Preview a render at any time:
 
 .. code-block:: sh
 
-   dzo render deerisle --dry-run --diff
+   dzo instance render deerisle --dry-run
+
+``dzo instance render <name>`` (without ``--dry-run``) is the same render, applied.
+It is what the unit runs before every start. The first render into an empty
+``mpmissions/<map>`` is the one-time initialisation from the pristine mission;
+every later render only touches files dzo manages (in the manifest, or new in
+the pristine mission). ``storage_*`` and everything matching
+``mission.unmanaged`` is never written.
+
+The pristine mission is fetched from ``mission_source`` (a git repo, ``ref`` and
+``path``) the first time it is missing, and never again on its own, so a start
+does not need the network. ``--update-pristine`` fetches it again; the live
+mission follows on that same render. A base file the map lacks (for example
+``cfgweather.xml``) is taken from ``fallback_mission`` in the installed server
+build, when a build is installed.
 
 How mod files are merged
 ------------------------

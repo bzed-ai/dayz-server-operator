@@ -57,7 +57,7 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 | `internal/quadlet` | Renders podman quadlet `.container` units (health checks, host/publish networking, mounts, F3's start-rate limit) without relying on deprecated or newer-than-baseline podman tooling |
 | `internal/cache` | An immutable, generation-based download cache with atomic activation and safe garbage collection |
 | `internal/site` | The site-config repo's schema types (`site.yaml`/`instance.yaml`/overlays) and git plumbing (clone/pull/commit/push) |
-| `internal/mission` | The live mission render/apply pipeline: manifest tracking, apply-plan classification, atomic writes with a filehistory safety net, and the CE/XML/JSON merge dispatcher |
+| `internal/mission` | The live mission render/apply pipeline (`dzo instance render`: git pristine fetch, fallback fill, staging, apply): manifest tracking, apply-plan classification, atomic writes with a filehistory safety net, and the CE/XML/JSON merge dispatcher |
 | `internal/a2s` | The Valve A2S server-query protocol client (challenge handshake + `A2S_INFO`) |
 | `internal/health` | `dzo health startup`/`live` — process + A2S (+ optional RCon) probes for `HealthStartupCmd`/`HealthCmd` |
 | `internal/hooks` | Runs the `pre_start`/`post_stop`/... extension-point scripts with a `DZO_*` env contract and a JSON context |
@@ -180,6 +180,10 @@ relying on them, roughly in the order they'd bite:
   It assumes the runtime image has no `ENTRYPOINT`, and that mods can live in
   `@<workshop id>` directories instead of `@<Name>` (DayZ does not care about
   the directory name; unverified).
+- **Pristine mission fetch** (`internal/mission`, `dzo instance render`):
+  it shallow-fetches `mission_source.ref` with plain `git`; tested against
+  local repos only. Fetching a bare commit id needs server support
+  (GitHub allows it); branches and tags always work.
 - **A2S `AppID` truncation** (`internal/a2s`): the wire field is a signed
   16-bit int; real DayZ app ids may wrap. Documented on `InfoResponse`.
 - **The `enfMain` process name** (`internal/health`'s process-existence

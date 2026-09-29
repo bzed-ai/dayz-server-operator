@@ -63,7 +63,7 @@ ports, ``template`` and ``instanceId`` itself), commit and pull:
 .. code-block:: sh
 
    dzo instance create chernarus    # subvolume, pristine mission, first live mission
-   dzo render chernarus --dry-run --diff
+   dzo instance render chernarus --dry-run
    dzo instance apply chernarus     # generate units and timers
    dzo start chernarus
    dzo status chernarus

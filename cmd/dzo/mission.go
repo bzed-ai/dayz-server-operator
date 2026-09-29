@@ -48,6 +48,14 @@ func printPlan(cmd *cobra.Command, plan mission.Plan) {
 	}
 }
 
+func printReport(cmd *cobra.Command, report mission.Report) {
+	out := cmd.OutOrStdout()
+	_, _ = fmt.Fprintf(out, "written: %d, drifted: %d, obsolete: %d\n", len(report.Written), len(report.Drifted), len(report.Obsolete))
+	for _, e := range report.Drifted {
+		_, _ = fmt.Fprintf(out, "warning: drift on %s (backed up before overwrite)\n", e.Path)
+	}
+}
+
 func newMissionDiffCmd() *cobra.Command {
 	var manifestPath, unmanaged string
 	cmd := &cobra.Command{
@@ -96,11 +104,7 @@ func newMissionApplyCmd() *cobra.Command {
 			if err := m.Save(manifestPath); err != nil {
 				return err
 			}
-			out := cmd.OutOrStdout()
-			_, _ = fmt.Fprintf(out, "written: %d, drifted: %d, obsolete: %d\n", len(report.Written), len(report.Drifted), len(report.Obsolete))
-			for _, e := range report.Drifted {
-				_, _ = fmt.Fprintf(out, "warning: drift on %s (backed up before overwrite)\n", e.Path)
-			}
+			printReport(cmd, report)
 			return nil
 		},
 	}

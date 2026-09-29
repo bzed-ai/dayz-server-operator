@@ -102,8 +102,8 @@ Missions and config
 .. list-table::
    :widths: 45 55
 
-   * - ``dzo render <name> [--dry-run] [--diff]``
-     - build the mission and show what would change
+   * - ``dzo instance render <name> [--dry-run] [--update-pristine]``
+     - build the mission and apply it in place, or show what would change
    * - ``dzo mission init | update | status <name>``
      - first live mission, fetch new pristine version, state
    * - ``dzo mission rollback <name> [<time>]``

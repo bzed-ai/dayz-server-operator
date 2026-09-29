@@ -13,7 +13,7 @@ A server does not start: "render failed"
 **Symptom:** ``dzo start`` fails, Discord reports a failed render, the live
 mission is unchanged.
 
-#. Show the problem: ``dzo render <name> --dry-run``. It names the file and the
+#. Show the problem: ``dzo instance render <name> --dry-run``. It names the file and the
    error (invalid XML, a missing referenced file, a missing mod dependency).
 #. Fix it in the site repository, commit, then ``dzo site pull``.
 #. ``dzo start <name>``.

@@ -5,6 +5,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ import (
 
 	"github.com/bzed-ai/dayz-server-operator/internal/battleye"
 	"github.com/bzed-ai/dayz-server-operator/internal/instance"
+	"github.com/bzed-ai/dayz-server-operator/internal/mission"
 	"github.com/bzed-ai/dayz-server-operator/internal/quadlet"
 )
 
@@ -27,7 +30,7 @@ func newInstanceCmd() *cobra.Command {
 		Use:   "instance",
 		Short: "Instance lifecycle: start/stop/restart, the F3 failure gate (§C5/§C8)",
 	}
-	cmd.AddCommand(newInstanceShowCmd(), newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceAckFailureCmd())
+	cmd.AddCommand(newInstanceShowCmd(), newInstanceRenderCmd(), newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceAckFailureCmd())
 	return cmd
 }
 
@@ -61,6 +64,48 @@ func newInstanceShowCmd() *cobra.Command {
 	}
 	configFlag(cmd, &configPath)
 	cmd.Flags().BoolVar(&showQuadlet, "quadlet", false, "print the rendered quadlet unit instead")
+	return cmd
+}
+
+func newInstanceRenderCmd() *cobra.Command {
+	var configPath string
+	var dryRun, updatePristine bool
+	cmd := &cobra.Command{
+		Use:   "render <name>",
+		Short: "Update the live mission from the pristine one, in place (--dry-run: only print the plan)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, inst, err := loadInstance(configPath, args[0])
+			if err != nil {
+				return err
+			}
+			src := inst.Mission.Source
+			if _, err := os.Stat(inst.Paths.Pristine); updatePristine || os.IsNotExist(err) {
+				if err := mission.FetchPristine(cmd.Context(), src.Git, src.Ref, src.Path, inst.Paths.Pristine); err != nil {
+					return err
+				}
+			}
+			in := mission.RenderInput{
+				PristineDir: inst.Paths.Pristine, LiveDir: inst.Paths.Live, ManifestPath: inst.Paths.Manifest,
+				FileHistoryDir: inst.Paths.FileHistory, Unmanaged: inst.Mission.Unmanaged, DryRun: dryRun,
+			}
+			if inst.Mission.Fallback != "" && inst.Product.Dir != "" {
+				in.FallbackDir = filepath.Join(inst.Product.Dir, "mpmissions", inst.Mission.Fallback)
+			}
+			plan, report, err := mission.Render(in)
+			if err != nil {
+				return err
+			}
+			printPlan(cmd, plan)
+			if !dryRun {
+				printReport(cmd, report)
+			}
+			return nil
+		},
+	}
+	configFlag(cmd, &configPath)
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the apply plan and write nothing to the live mission")
+	cmd.Flags().BoolVar(&updatePristine, "update-pristine", false, "fetch the pristine mission again from git before rendering")
 	return cmd
 }
 
