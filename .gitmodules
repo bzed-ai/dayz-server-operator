@@ -1,0 +1,4 @@
+[submodule "servermods/dzo-admin"]
+	path = servermods/dzo-admin
+	url = git@github.com:bzed-ai/dzo-admin.git
+	branch = main
