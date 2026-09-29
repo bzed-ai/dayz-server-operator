@@ -47,6 +47,8 @@ func buildPBO(t *testing.T, withVersEntry bool, entries []pboEntry) []byte {
 		writeUint32(0)
 		writeCString("product")
 		writeCString("dzo-test")
+		writeCString("prefix")
+		writeCString(`dzo\test`)
 		writeCString("") // terminates the product-info pairs
 	}
 
@@ -124,6 +126,9 @@ func TestOpenPBOWithVersEntry(t *testing.T) {
 	}
 	if len(pbo.Entries) != 1 {
 		t.Fatalf("Entries = %d, want 1 (the Vers entry must not be listed)", len(pbo.Entries))
+	}
+	if pbo.Prefix != `dzo\test` {
+		t.Errorf("Prefix = %q", pbo.Prefix)
 	}
 	entry, _ := pbo.Find("config.cpp")
 	got, err := pbo.ReadEntry(entry)

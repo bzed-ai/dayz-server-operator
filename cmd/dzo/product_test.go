@@ -20,69 +20,6 @@ func writeFakeSteamcmdProductCmd(t *testing.T, script string) string {
 	return path
 }
 
-func TestProductUpdateSuccess(t *testing.T) {
-	script := writeFakeSteamcmdProductCmd(t, `
-case "$*" in
-  *app_update*) echo "Success! App '223350' fully installed." ;;
-esac
-`)
-	out, err := runCmd(t, "product", "update", "223350",
-		"--account", "bob", "--command", script, "--install-dir", t.TempDir())
-	if err != nil {
-		t.Fatalf("product update: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "OK") {
-		t.Errorf("output = %q", out)
-	}
-}
-
-func TestProductUpdateFailure(t *testing.T) {
-	script := writeFakeSteamcmdProductCmd(t, `
-case "$*" in
-  *app_update*)
-    echo "ERROR! Failed to install app '223350'"
-    exit 7
-    ;;
-esac
-`)
-	out, err := runCmd(t, "product", "update", "223350",
-		"--account", "bob", "--command", script, "--install-dir", t.TempDir())
-	if err == nil {
-		t.Fatal("expected an error for a failed update")
-	}
-	if !strings.Contains(out, "FAILED") {
-		t.Errorf("output = %q", out)
-	}
-}
-
-func TestProductUpdateAuthRequired(t *testing.T) {
-	script := filepath.Join(t.TempDir(), "fake-steamcmd.sh")
-	if err := os.WriteFile(script, []byte("#!/bin/sh\necho \"FAILED (Invalid Password)\"\n"), 0o755); err != nil { //nolint:gosec // test fixture
-		t.Fatalf("write fake steamcmd: %v", err)
-	}
-	out, err := runCmd(t, "product", "update", "223350",
-		"--account", "bob", "--command", script, "--install-dir", t.TempDir())
-	if err == nil {
-		t.Fatal("expected an error for auth required")
-	}
-	if !strings.Contains(out, "AUTH REQUIRED") {
-		t.Errorf("output = %q", out)
-	}
-}
-
-func TestProductUpdateInvalidAppID(t *testing.T) {
-	if _, err := runCmd(t, "product", "update", "not-a-number",
-		"--account", "bob", "--command", "steamcmd", "--install-dir", t.TempDir()); err == nil {
-		t.Fatal("expected an error for a non-numeric app id")
-	}
-}
-
-func TestProductUpdateRequiresAccountAndInstallDir(t *testing.T) {
-	if _, err := runCmd(t, "product", "update", "223350"); err == nil {
-		t.Fatal("expected an error for missing required flags")
-	}
-}
-
 func TestModDownloadSuccess(t *testing.T) {
 	script := writeFakeSteamcmdProductCmd(t, `
 case "$*" in

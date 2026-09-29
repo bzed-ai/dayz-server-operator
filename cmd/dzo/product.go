@@ -38,7 +38,7 @@ func newProductCmd() *cobra.Command {
 		Use:   "product",
 		Short: "Manual server build downloads (§C7); never automatic (D7)",
 	}
-	cmd.AddCommand(newProductUpdateCmd())
+	cmd.AddCommand(newProductInstallCmd(), newProductUpdateCmd())
 	return cmd
 }
 
@@ -47,7 +47,8 @@ func newModCmd() *cobra.Command {
 		Use:   "mod",
 		Short: "Workshop mod downloads and dependency checks (§C7)",
 	}
-	cmd.AddCommand(newModDownloadCmd(), newModCfgPatchesCmd(), newModDepsCmd())
+	cmd.AddCommand(newModDownloadCmd(), newModCfgPatchesCmd(), newModDepsCmd(),
+		newModListCmd(), newModAddCmd(), newModUpdateCmd(), newModRefreshCmd())
 	return cmd
 }
 
@@ -75,36 +76,6 @@ func newModDownloadCmd() *cobra.Command {
 	cmd.Flags().Uint32Var(&opts.WorkshopAppID, "workshop-app-id", 221100, "Steam Workshop app id (221100 for DayZ)")
 	cmd.Flags().BoolVar(&opts.Validate, "validate", true, "pass 'validate' to workshop_download_item")
 	_ = cmd.MarkFlagRequired("account")
-	return cmd
-}
-
-func newProductUpdateCmd() *cobra.Command {
-	var opts product.AppUpdateOptions
-	cmd := &cobra.Command{
-		Use:   "update <app-id>",
-		Short: "Run steamcmd +app_update for a product build",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			id, err := strconv.ParseUint(args[0], 10, 32)
-			if err != nil {
-				return fmt.Errorf("invalid app id %q: %w", args[0], err)
-			}
-			opts.AppID = uint32(id)
-			result, err := product.RunAppUpdate(cmd.Context(), opts)
-			if err != nil {
-				return err
-			}
-			return printJobResult(cmd, result)
-		},
-	}
-	cmd.Flags().StringVar(&opts.Command, "command", "steamcmd", "steamcmd binary to run")
-	cmd.Flags().StringVar(&opts.Account, "account", "", "Steam account name (required; must already have a cached session, see `dzo steam login`)")
-	cmd.Flags().StringVar(&opts.InstallDir, "install-dir", "", "+force_install_dir target (required)")
-	cmd.Flags().StringVar(&opts.BetaBranch, "beta-branch", "", "optional steamcmd beta branch")
-	cmd.Flags().StringVar(&opts.BetaPassword, "beta-password", "", "optional beta branch password")
-	cmd.Flags().BoolVar(&opts.Validate, "validate", true, "pass 'validate' to app_update")
-	_ = cmd.MarkFlagRequired("account")
-	_ = cmd.MarkFlagRequired("install-dir")
 	return cmd
 }
 

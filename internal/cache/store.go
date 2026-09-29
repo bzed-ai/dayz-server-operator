@@ -48,19 +48,29 @@ func (s *Store) withLock(fn func() error) error {
 	if err := s.EnsureRoot(); err != nil {
 		return err
 	}
-	lockPath := filepath.Join(s.Root, lockFileName)
-	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // lockPath is s.Root (a dzo-configured cache dir) + a constant filename
+	unlock, err := Flock(filepath.Join(s.Root, lockFileName))
 	if err != nil {
-		return fmt.Errorf("cache: open lock file: %w", err)
+		return err
 	}
-	defer func() { _ = f.Close() }()
-
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		return fmt.Errorf("cache: acquire lock: %w", err)
-	}
-	defer syscall.Flock(int(f.Fd()), syscall.LOCK_UN) //nolint:errcheck // best-effort unlock
-
+	defer unlock()
 	return fn()
+}
+
+// Flock takes an exclusive advisory lock on path (created if missing) and
+// returns the function that releases it. It blocks until the lock is free.
+func Flock(path string) (unlock func(), err error) {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // path is a dzo-configured cache dir + a constant filename
+	if err != nil {
+		return nil, fmt.Errorf("cache: open lock file: %w", err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		_ = f.Close()
+		return nil, fmt.Errorf("cache: acquire lock: %w", err)
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
+	}, nil
 }
 
 // isReservedName reports whether name is a store-internal entry rather than

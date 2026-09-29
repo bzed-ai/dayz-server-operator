@@ -286,8 +286,8 @@ func resolveMod(cfg *config.Config, t *site.Tree, prod config.Product, ref site.
 	m := Mod{ID: ref.ID, Local: ref.Local, Server: ref.Server}
 	var store *cache.Store
 	if ref.Local != "" {
-		if _, declared := t.Site.LocalMods[ref.Local]; !declared && !isDir(filepath.Join(t.Dir, "localmods", ref.Local)) {
-			return m, fmt.Errorf("local mod %q: no local_mods entry in site.yaml and no localmods/%s/ in the site repo", ref.Local, ref.Local)
+		if _, err := LocalSource(t, ref.Local); err != nil {
+			return m, err
 		}
 		m.Name = "@" + ref.Local
 		store = product.LocalModStore(cfg.Paths.Cache, ref.Local)
@@ -298,6 +298,21 @@ func resolveMod(cfg *config.Config, t *site.Tree, prod config.Product, ref site.
 	var err error
 	m.Generation, m.Dir, err = current(store)
 	return m, err
+}
+
+// LocalSource finds where a local servermod is imported from (§C7): its
+// site.yaml `local_mods` entry, else localmods/<name>/ in the site repo.
+func LocalSource(t *site.Tree, name string) (product.LocalSource, error) {
+	if l, ok := t.Site.LocalMods[name]; ok {
+		if l.URL != "" {
+			return product.LocalSource{URL: l.URL, SHA256: l.SHA256}, nil
+		}
+		return product.LocalSource{Dir: l.Path}, nil
+	}
+	if dir := filepath.Join(t.Dir, "localmods", name); isDir(dir) {
+		return product.LocalSource{Dir: dir}, nil
+	}
+	return product.LocalSource{}, fmt.Errorf("local mod %q: no local_mods entry in site.yaml and no localmods/%s/ in the site repo", name, name)
 }
 
 // buildQuadlet composes the instance's container: the shared build mounted

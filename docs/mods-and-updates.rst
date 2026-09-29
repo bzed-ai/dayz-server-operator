@@ -11,13 +11,16 @@ Adding and removing mods
 
 .. code-block:: sh
 
-   dzo mod add <workshop id> --instance deerisle [--server]
+   dzo mod add <workshop id | local name> --instance deerisle [--server]
+   dzo mod list [deerisle]
    dzo instance mods deerisle list
    dzo instance mods deerisle move <id> --before <other id>
    dzo mod remove <workshop id> --instance deerisle
 
-The change is written to the site repository (and committed if ``site.commit``
-is on). It takes effect at the next restart.
+``dzo mod add`` installs the mod first, and only then adds it to the instance's
+``instance.yaml`` in the site repository (the file's comments are kept; the
+change is left uncommitted for you to commit). It takes effect at the next
+restart.
 
 Before every start dzo reads the ``CfgPatches`` of all loaded mods and checks
 that every required addon is present. A missing dependency stops the start with
@@ -79,6 +82,45 @@ Check by hand:
    dzo update check            # show what is pending
    dzo update check --apply    # download and apply according to the policies
 
+Installing mods and server builds
+---------------------------------
+
+Everything dzo downloads is stored as an immutable *generation*: a directory
+that is never changed after it appears, so a running server never sees files
+move under it. A new version is a new generation, and ``current`` is switched
+only after the new one is complete and validated. Re-running a command never
+touches an existing generation.
+
+.. code-block:: sh
+
+   dzo product install dayz-stable      # first download of the server build
+   dzo mod update [deerisle]            # new mod versions, for one instance or all
+   dzo mod list [deerisle]              # what is installed
+
+Workshop mods are named by Steam's ``time_updated`` (``<time_updated>`` or, after
+a forced refresh, ``<time_updated>-r<n>``) and the server build by its Steam
+build id. Steam downloads run one at a time: dzo holds a lock, and the Steam
+session from ``dzo steam login`` must be valid (``steam.account`` in
+``config.yaml`` names the account).
+
+A downloaded mod is checked before it becomes a generation: ``meta.cpp`` must be
+there and every PBO under ``addons/`` must parse. If a mod fails the check, the
+other mods of the same run are still installed, and the command exits with an
+error. Installing does not restart anything; running servers keep the
+generation they were started with.
+
+**Local servermods** (``{local: <name>, server: true}``) are imported the same
+way, from ``localmods/<name>/`` in the site repository, a host directory, or a
+release archive (``local_mods`` in ``site.yaml``, see :doc:`resolved-instance`).
+The generation is named after a sha256 over the mod's files, so unchanged
+content is never imported twice. Only regular files are accepted: a symlink is
+an error, and archives with absolute paths, ``..``, links or device files are
+rejected. An archive is checked against its sha256 before it is unpacked. The
+mod root is the directory holding ``addons/`` (directly, or in a single
+``@<name>`` directory); a ``keys/`` directory is ignored. Every PBO of a local
+mod must carry a ``prefix`` header, because a PBO without one loads without an
+error but none of its scripts run.
+
 Broken or corrupted mod downloads
 ---------------------------------
 
@@ -90,13 +132,15 @@ incomplete or damaged, or when Steam's own cache serves a bad copy:
 
 .. code-block:: sh
 
-   dzo mod refresh <id> [<id>…] [--instance deerisle] [--no-restart]
-   dzo mod refresh --all --instance deerisle
+   dzo mod refresh <id> [<id>…] [--instance deerisle] --force
+   dzo mod refresh --all --instance deerisle --force
 
 This deletes steamcmd's cached state for the mod, downloads it again even if
 Steam reports no change, checks the result (``meta.cpp`` present, every PBO
-readable, size as reported by Steam), stores it as a new generation and applies
-it like a normal update. The web interface has the same action per mod.
+readable) and stores it as a new generation. Servers switch to it at their next
+restart. ``--force`` is required, to make it clear that this
+downloads regardless of Steam's version. The web interface has the same action
+per mod.
 
 As a last resort, ``dzo steam reset-cache`` wipes steamcmd's working directory
 after confirmation. The next download fills it again.

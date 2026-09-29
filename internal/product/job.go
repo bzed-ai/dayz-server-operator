@@ -34,6 +34,7 @@ type WorkshopDownloadOptions struct {
 	Account       string
 	WorkshopAppID uint32
 	ItemIDs       []uint64
+	InstallDir    string // +force_install_dir: items land in <dir>/steamapps/workshop/content/<app>/<id>
 	Validate      bool
 }
 
@@ -144,7 +145,11 @@ func RunWorkshopDownload(ctx context.Context, opts WorkshopDownloadOptions) (Job
 		return JobResult{}, err
 	}
 
-	args := []string{"+login", opts.Account}
+	var args []string
+	if opts.InstallDir != "" {
+		args = append(args, "+force_install_dir", opts.InstallDir)
+	}
+	args = append(args, "+login", opts.Account)
 	for _, id := range opts.ItemIDs {
 		args = append(args, "+workshop_download_item", strconv.FormatUint(uint64(opts.WorkshopAppID), 10), strconv.FormatUint(id, 10))
 		if opts.Validate {

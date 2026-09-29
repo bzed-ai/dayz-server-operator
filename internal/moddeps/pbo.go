@@ -30,6 +30,7 @@ const maxEntrySize = 256 << 20
 // ReadEntry to fetch one entry's bytes.
 type PBO struct {
 	Entries []Entry
+	Prefix  string // the "prefix" header property; "" if the PBO has none
 	r       io.ReaderAt
 	size    int64
 }
@@ -41,6 +42,7 @@ type PBO struct {
 func OpenPBO(data []byte) (*PBO, error) {
 	r := bytes.NewReader(data)
 	var entries []Entry
+	var prefix string
 	offset := int64(0)
 
 	readUint32 := func() (uint32, error) {
@@ -108,8 +110,12 @@ func OpenPBO(data []byte) (*PBO, error) {
 				if k == "" {
 					break
 				}
-				if _, err := readCString(); err != nil {
+				v, err := readCString()
+				if err != nil {
 					return nil, fmt.Errorf("moddeps: read product-info entry: %w", err)
+				}
+				if strings.EqualFold(k, "prefix") {
+					prefix = v
 				}
 			}
 			continue
@@ -125,7 +131,7 @@ func OpenPBO(data []byte) (*PBO, error) {
 		dataStart += int64(entries[i].DataSize)
 	}
 
-	return &PBO{Entries: entries, r: bytes.NewReader(data), size: int64(len(data))}, nil
+	return &PBO{Entries: entries, Prefix: prefix, r: bytes.NewReader(data), size: int64(len(data))}, nil
 }
 
 // Find returns the entry named name (case-insensitive; "/" and "\" are

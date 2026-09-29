@@ -267,3 +267,20 @@ func sortedCopy(in []string) []string {
 	}
 	return out
 }
+
+func TestFlock(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "lock")
+	unlock, err := Flock(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+	unlock2, err := Flock(path) // free again after unlock
+	if err != nil {
+		t.Fatal(err)
+	}
+	unlock2()
+	if _, err := Flock(filepath.Join(t.TempDir(), "no", "such", "dir", "lock")); err == nil {
+		t.Error("an uncreatable lock file must fail")
+	}
+}

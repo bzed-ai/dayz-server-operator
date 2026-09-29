@@ -64,7 +64,7 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 | `internal/notify` | Discord webhook notifications, per-event templates, and event coalescing |
 | `internal/monitor` | Prometheus `/metrics`, JSON `/status`, and Icinga/Nagios-compatible checks |
 | `internal/steam` | The interactive steamcmd login state machine (pty-driven prompt classifier) and a non-interactive mode for scheduled jobs |
-| `internal/product` | The update-window/batching scheduling decision, a Steam Web API mod-freshness client, and the steamcmd job runner for `+app_update`/`+workshop_download_item` |
+| `internal/product` | The update-window/batching scheduling decision, a Steam Web API mod-freshness client, the steamcmd job runner for `+app_update`/`+workshop_download_item`, and the install flow that turns downloads and local servermods (dir, host path, URL+sha256) into validated immutable generations (`dzo product install\|update`, `dzo mod add\|update\|list\|refresh`) |
 | `internal/moddeps` | CfgPatches `requiredAddons` dependency validation and load-order sorting, from a PBO (rapified `config.bin`, LZSS entries) or a plain-text `config.cpp` |
 | `internal/resolve` | Combines `config.yaml`, the site checkout (`site.yaml` defaults + `instance.yaml`) and the cache into one resolved instance, including its quadlet spec; behind `dzo instance show` |
 | `internal/instance` | Ties the above into one instance's lifecycle: the F3 failed-render gate, quadlet+timer materialization, systemd start/stop/restart, and the BattlEye lock/kick graceful-restart sequence |
@@ -165,6 +165,13 @@ relying on them, roughly in the order they'd bite:
   PBOs (compressed and uncompressed entries, nested arrays, `+=` arrays)
   with `dzo mod cfgpatches`; the LZSS ring-offset convention is the least
   certain part.
+- **The install flow against a real steamcmd** (`internal/product`):
+  where steamcmd puts workshop items (`<force_install_dir>/steamapps/workshop/
+  content/<app>/<id>`), the `appmanifest_<app>.acf` build id, the
+  `appworkshop_<app>.acf` layout the forced refresh edits, and `+force_install_dir`
+  being honoured by `workshop_download_item` are all from documentation and
+  memory. Not implemented: the "size plausible vs. `file_size`" check. Real
+  workshop PBOs are only checked for parsing, not for a prefix.
 - **BattlEye's `players` command output format** (`internal/instance`'s
   graceful-restart kick sequence) and the event message patterns
   (`internal/battleye`'s connect/GUID/chat/kick regexes, spike S4) are

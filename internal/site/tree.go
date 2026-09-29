@@ -148,3 +148,55 @@ func (t *Tree) InstanceNames() []string {
 	sort.Strings(names)
 	return names
 }
+
+// AddMod appends ref to the mods list of the instance file at path, keeping
+// the rest of the file (comments included) as it is. It is an error if the
+// mod is listed already.
+func AddMod(path string, ref ModRef) error {
+	if err := ref.Validate(); err != nil {
+		return err
+	}
+	data, err := os.ReadFile(path) //nolint:gosec // path is inside the operator's site checkout
+	if err != nil {
+		return fmt.Errorf("site: read %s: %w", path, err)
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return fmt.Errorf("site: parse %s: %w", path, err)
+	}
+	if len(doc.Content) != 1 || doc.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("site: %s: not a YAML mapping", path)
+	}
+	var entry yaml.Node
+	if err := entry.Encode(ref); err != nil {
+		return err
+	}
+	entry.Style = yaml.FlowStyle
+
+	m := doc.Content[0]
+	var list *yaml.Node
+	for i := 0; i+1 < len(m.Content); i += 2 {
+		if m.Content[i].Value == "mods" {
+			list = m.Content[i+1]
+		}
+	}
+	if list == nil {
+		list = &yaml.Node{Kind: yaml.SequenceNode}
+		m.Content = append(m.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: "mods"}, list)
+	}
+	for _, n := range list.Content {
+		var have ModRef
+		if err := n.Decode(&have); err == nil && have.Key() == ref.Key() {
+			return fmt.Errorf("site: %s already lists mod %s", path, ref.Key())
+		}
+	}
+	list.Content = append(list.Content, &entry)
+
+	var out bytes.Buffer
+	enc := yaml.NewEncoder(&out)
+	enc.SetIndent(2)
+	if err := enc.Encode(&doc); err != nil {
+		return err
+	}
+	return os.WriteFile(path, out.Bytes(), 0o600)
+}

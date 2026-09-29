@@ -98,3 +98,49 @@ func TestLoadTreeUnreadableSiteYAML(t *testing.T) {
 		t.Fatal("want a read error")
 	}
 }
+
+func TestAddMod(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "instances", "a", "instance.yaml")
+	write(t, dir, "instances/a/instance.yaml", "# my server\nname: a\nproduct: dayz-stable   # stable\nmap: m\nmission_source: {preset: vanilla}\nports: {game: 2302}\nnetwork: host\n")
+
+	if err := AddMod(path, ModRef{ID: 1559212036}); err != nil {
+		t.Fatalf("AddMod: %v", err)
+	}
+	if err := AddMod(path, ModRef{Local: "tools", Server: true}); err != nil {
+		t.Fatalf("AddMod local: %v", err)
+	}
+	got, _ := os.ReadFile(path)
+	for _, want := range []string{"# my server", "# stable", "- {id: 1559212036}", "- {local: tools, server: true}"} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("file lacks %q:\n%s", want, got)
+		}
+	}
+	// the result still loads
+	write(t, dir, "integrations/maps/vanilla.yaml", "git: g\nref: r\npath: p\n")
+	tree, err := LoadTree(dir)
+	if err != nil || len(tree.Instances["a"].Mods) != 2 {
+		t.Fatalf("LoadTree = %v, %v", tree, err)
+	}
+	if err := AddMod(path, ModRef{ID: 1559212036}); err == nil || !strings.Contains(err.Error(), "already lists") {
+		t.Errorf("duplicate AddMod = %v", err)
+	}
+}
+
+func TestAddModErrors(t *testing.T) {
+	dir := t.TempDir()
+	if err := AddMod(filepath.Join(dir, "missing.yaml"), ModRef{ID: 1}); err == nil {
+		t.Error("missing file must fail")
+	}
+	if err := AddMod(filepath.Join(dir, "x.yaml"), ModRef{}); err == nil {
+		t.Error("an invalid ref must fail")
+	}
+	write(t, dir, "list.yaml", "- a\n")
+	if err := AddMod(filepath.Join(dir, "list.yaml"), ModRef{ID: 1}); err == nil || !strings.Contains(err.Error(), "not a YAML mapping") {
+		t.Errorf("err = %v", err)
+	}
+	write(t, dir, "bad.yaml", "a: [\n")
+	if err := AddMod(filepath.Join(dir, "bad.yaml"), ModRef{ID: 1}); err == nil {
+		t.Error("broken YAML must fail")
+	}
+}

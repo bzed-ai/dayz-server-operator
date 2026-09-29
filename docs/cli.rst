@@ -83,13 +83,15 @@ Mods
 .. list-table::
    :widths: 45 55
 
-   * - ``dzo mod add <id> [--instance <name>] [--server]``
-     - add a workshop mod
+   * - ``dzo mod add <id | local name> --instance <name> [--server]``
+     - install a mod and add it to an instance
+   * - ``dzo mod list [<instance>]``
+     - the mods of an instance and their installed generation
    * - ``dzo mod remove <id> [--instance <name>]``
      - remove a mod
-   * - ``dzo mod update [<id>…]``
+   * - ``dzo mod update [<instance>]``
      - check and download updates now
-   * - ``dzo mod refresh <id>… | --all [--instance <name>] [--no-restart]``
+   * - ``dzo mod refresh <id>… | --all [--instance <name>] --force``
      - force a fresh download
    * - ``dzo mod deps <name>``
      - dependency graph of an instance's mods
