@@ -8,7 +8,11 @@
 // plumbing to clone/pull/commit/push the repo.
 package site
 
-import "fmt"
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+)
 
 // Network selects how an instance's ports reach the host (D6), mirroring
 // internal/quadlet.Network so callers can convert directly.
@@ -158,12 +162,47 @@ type HooksConfig struct {
 	PostBackup   []string `yaml:"post_backup,omitempty"`
 }
 
-// ModRef is one entry in an instance's mod list. List order is the dzo
-// merge/CE precedence order (later wins), independent of any in-game
-// -mod= load order.
+// ModRef is one entry in an instance's mod list: a workshop mod (ID) or a
+// local servermod (Local, §C7/D37). List order is the dzo merge/CE
+// precedence order (later wins), independent of any in-game -mod= load
+// order.
 type ModRef struct {
-	ID     uint64 `yaml:"id"`
+	ID     uint64 `yaml:"id,omitempty"`
+	Local  string `yaml:"local,omitempty"`
 	Server bool   `yaml:"server,omitempty"`
+}
+
+// localModName is the name rule for local mods (§C7): it is not purely
+// numeric (checked separately), so it cannot collide with a workshop id.
+var localModName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]*$`)
+
+// Key identifies the mod within one instance's list.
+func (m ModRef) Key() string {
+	if m.Local != "" {
+		return m.Local
+	}
+	return strconv.FormatUint(m.ID, 10)
+}
+
+// Validate checks that exactly one of ID/Local is set and that a local mod
+// is a servermod with a legal name.
+func (m ModRef) Validate() error {
+	if (m.ID == 0) == (m.Local == "") {
+		return fmt.Errorf("mods: exactly one of id or local must be set")
+	}
+	if m.Local == "" {
+		return nil
+	}
+	if !localModName.MatchString(m.Local) {
+		return fmt.Errorf("mods: local name %q must match %s", m.Local, localModName)
+	}
+	if _, err := strconv.ParseUint(m.Local, 10, 64); err == nil {
+		return fmt.Errorf("mods: local name %q must not be purely numeric", m.Local)
+	}
+	if !m.Server {
+		return fmt.Errorf("mods: local mod %q must set server: true (clients cannot fetch local mods)", m.Local)
+	}
+	return nil
 }
 
 // Instance is one instances/<name>/instance.yaml (§C3 example).
@@ -212,16 +251,16 @@ func (i Instance) Validate() error {
 	if i.Ports.Game == 0 {
 		errs = append(errs, "ports.game is required")
 	}
-	seen := map[uint64]bool{}
+	seen := map[string]bool{}
 	for _, m := range i.Mods {
-		if m.ID == 0 {
-			errs = append(errs, "mods: entry with id 0")
+		if err := m.Validate(); err != nil {
+			errs = append(errs, err.Error())
 			continue
 		}
-		if seen[m.ID] {
-			errs = append(errs, fmt.Sprintf("mods: duplicate id %d", m.ID))
+		if seen[m.Key()] {
+			errs = append(errs, fmt.Sprintf("mods: duplicate entry %s", m.Key()))
 		}
-		seen[m.ID] = true
+		seen[m.Key()] = true
 	}
 	switch i.Updates.Policy {
 	case "", PolicyAuto, PolicyNotify, PolicyManual:

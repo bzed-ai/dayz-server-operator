@@ -66,6 +66,7 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 | `internal/steam` | The interactive steamcmd login state machine (pty-driven prompt classifier) and a non-interactive mode for scheduled jobs |
 | `internal/product` | The update-window/batching scheduling decision, a Steam Web API mod-freshness client, and the steamcmd job runner for `+app_update`/`+workshop_download_item` |
 | `internal/moddeps` | CfgPatches `requiredAddons` dependency validation and load-order sorting, from a PBO or a plain-text `config.cpp` |
+| `internal/resolve` | Combines `config.yaml`, the site checkout (`site.yaml` defaults + `instance.yaml`) and the cache into one resolved instance, including its quadlet spec; behind `dzo instance show` |
 | `internal/instance` | Ties the above into one instance's lifecycle: the F3 failed-render gate, quadlet+timer materialization, systemd start/stop/restart, and the BattlEye lock/kick graceful-restart sequence |
 | `cmd/dzo` | The CLI wiring all of the above together |
 
@@ -172,6 +173,13 @@ relying on them, roughly in the order they'd bite:
   test pass, but there is still no automatic reconnect-with-backoff:
   once the read loop hits a connection error, that `Client` is done and
   callers have to notice and re-`Dial`.
+- **The resolved quadlet unit** (`internal/resolve`): the `DayZServer`
+  command line, the nested mounts over the read-only build (`/dayz/keys`,
+  `/dayz/mpmissions`, `@<id>` mods) and the single `Exec=` line with
+  `;`-quoting are only checked against podman's documented quadlet syntax.
+  It assumes the runtime image has no `ENTRYPOINT`, and that mods can live in
+  `@<workshop id>` directories instead of `@<Name>` (DayZ does not care about
+  the directory name; unverified).
 - **A2S `AppID` truncation** (`internal/a2s`): the wire field is a signed
   16-bit int; real DayZ app ids may wrap. Documented on `InfoResponse`.
 - **The `enfMain` process name** (`internal/health`'s process-existence

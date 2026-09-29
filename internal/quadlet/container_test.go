@@ -49,11 +49,13 @@ func TestRenderContainerHostNetwork(t *testing.T) {
 		},
 		Environment: map[string]string{"B": "2", "A": "1"},
 		Health: Health{
-			Cmd:         "/usr/local/bin/dzo health startup",
-			Interval:    60 * time.Second,
-			StartPeriod: 45 * time.Minute,
-			Retries:     5,
-			OnFailure:   "kill",
+			Cmd:             "/usr/local/bin/dzo health startup",
+			Interval:        60 * time.Second,
+			StartupCmd:      "/usr/local/bin/dzo health startup",
+			StartupInterval: 30 * time.Second,
+			StartupRetries:  90,
+			Retries:         5,
+			OnFailure:       "kill",
 		},
 		Memory:      "24G",
 		StopTimeout: 30 * time.Second,
@@ -77,7 +79,10 @@ func TestRenderContainerHostNetwork(t *testing.T) {
 		"Environment=B=2\n",
 		"HealthCmd=/usr/local/bin/dzo health startup",
 		"HealthInterval=1m",
-		"HealthStartupTimeout=45m",
+		"HealthStartupCmd=/usr/local/bin/dzo health startup",
+		"HealthStartupInterval=30s",
+		"HealthStartupRetries=90",
+		"HealthStartupSuccess=1",
 		"HealthRetries=5",
 		"HealthOnFailure=kill",
 		"PodmanArgs=--memory=24G",
@@ -194,5 +199,38 @@ func TestFormatDurationUnits(t *testing.T) {
 		if got := formatDuration(d); got != want {
 			t.Errorf("formatDuration(%v) = %q, want %q", d, got, want)
 		}
+	}
+}
+
+func TestRenderContainerExecServiceAndNotify(t *testing.T) {
+	spec := ContainerSpec{
+		Name:            "dzo-x",
+		Image:           "img",
+		Network:         NetworkHost,
+		WorkingDir:      "/dayz",
+		Exec:            []string{"./DayZServer", "-mod=@1;@2", `-name=a "b" 100%`, "-p=$X"},
+		NotifyHealthy:   true,
+		PreStart:        []string{"/usr/bin/dzo instance render x"},
+		RestartSec:      15 * time.Second,
+		TimeoutStartSec: time.Hour,
+	}
+	out, err := RenderContainer(spec)
+	if err != nil {
+		t.Fatalf("RenderContainer: %v", err)
+	}
+	for _, want := range []string{
+		"WorkingDir=/dayz\n",
+		`Exec=./DayZServer "-mod=@1;@2" "-name=a \"b\" 100%%" -p=$$X` + "\n",
+		"Notify=healthy\n",
+		"ExecStartPre=/usr/bin/dzo instance render x\n",
+		"RestartSec=15s\n",
+		"TimeoutStartSec=1h\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %q:\n%s", want, out)
+		}
+	}
+	if n := strings.Count(out, "Exec="); n != 1 {
+		t.Errorf("want exactly one Exec= line, got %d", n)
 	}
 }

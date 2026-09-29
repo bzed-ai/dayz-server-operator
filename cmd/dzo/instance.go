@@ -5,12 +5,15 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 
 	"github.com/bzed-ai/dayz-server-operator/internal/battleye"
 	"github.com/bzed-ai/dayz-server-operator/internal/instance"
+	"github.com/bzed-ai/dayz-server-operator/internal/quadlet"
 )
 
 // newInstanceCmd wires the lifecycle operations internal/instance
@@ -24,7 +27,40 @@ func newInstanceCmd() *cobra.Command {
 		Use:   "instance",
 		Short: "Instance lifecycle: start/stop/restart, the F3 failure gate (§C5/§C8)",
 	}
-	cmd.AddCommand(newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceAckFailureCmd())
+	cmd.AddCommand(newInstanceShowCmd(), newInstanceStartCmd(), newInstanceStopCmd(), newInstanceRestartCmd(), newInstanceAckFailureCmd())
+	return cmd
+}
+
+func newInstanceShowCmd() *cobra.Command {
+	var configPath string
+	var showQuadlet bool
+	cmd := &cobra.Command{
+		Use:   "show <name>",
+		Short: "Print an instance's resolved configuration as YAML",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, inst, err := loadInstance(configPath, args[0])
+			if err != nil {
+				return err
+			}
+			if showQuadlet {
+				if len(inst.Missing) > 0 {
+					return fmt.Errorf("instance %q is not installed completely: %s", inst.Name, strings.Join(inst.Missing, "; "))
+				}
+				unit, err := quadlet.RenderContainer(inst.Quadlet)
+				if err != nil {
+					return err
+				}
+				_, err = fmt.Fprint(cmd.OutOrStdout(), unit)
+				return err
+			}
+			enc := yaml.NewEncoder(cmd.OutOrStdout())
+			enc.SetIndent(2)
+			return enc.Encode(inst)
+		},
+	}
+	configFlag(cmd, &configPath)
+	cmd.Flags().BoolVar(&showQuadlet, "quadlet", false, "print the rendered quadlet unit instead")
 	return cmd
 }
 

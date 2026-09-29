@@ -25,12 +25,16 @@ Operator configuration
      cache: ${data}/cache
      secrets: ${data}/secrets
      db: ${data}/db
+     site: ${data}/site
 
    site:
      url: git@<git host>:<you>/dayz-site.git
      branch: main
      commit: true
      push: false
+
+   steam:
+     account: <steam account name>  # used by steamcmd for downloads
 
    products:                       # built-in defaults, override only if needed
      dayz-stable:       {server_appid: 223350,  branch: public, workshop_appid: 221100}

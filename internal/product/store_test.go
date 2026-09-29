@@ -66,3 +66,9 @@ func TestStoreIntegrationWithCache(t *testing.T) {
 		t.Error("NewGeneration returned an empty path")
 	}
 }
+
+func TestLocalModStore(t *testing.T) {
+	if got, want := LocalModStore("/c", "tools").Root, "/c/local/tools"; got != want {
+		t.Errorf("Root = %q, want %q", got, want)
+	}
+}

@@ -3,10 +3,10 @@ SPDX-PackageName = "dayz-server-operator"
 SPDX-PackageSupplier = "Bernd Zeimetz <bernd@bzed.de>"
 SPDX-PackageDownloadLocation = "https://github.com/bzed-ai/dayz-server-operator"
 
-# go.sum is a machine-generated, strictly-formatted checksum lockfile: it
+# .gitmodules is git configuration; go.sum is a machine-generated, strictly-formatted checksum lockfile: it
 # cannot carry a comment header without breaking `go mod verify`.
 [[annotations]]
-path = "go.sum"
+path = ["go.sum", ".gitmodules"]
 SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
 SPDX-License-Identifier = "AGPL-3.0-or-later"
 
@@ -14,5 +14,12 @@ SPDX-License-Identifier = "AGPL-3.0-or-later"
 # cannot, per their own file format) carry an SPDX comment header.
 [[annotations]]
 path = ["debian/control", "debian/changelog", "debian/copyright", "debian/source/format", "debian/*.install"]
+SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+# Test fixtures and golden files: byte-exact inputs/outputs that cannot carry
+# a comment header without changing what they test.
+[[annotations]]
+path = "**/testdata/**"
 SPDX-FileCopyrightText = "2026 Bernd Zeimetz <bernd@bzed.de>"
 SPDX-License-Identifier = "AGPL-3.0-or-later"

@@ -1,0 +1,110 @@
+name: alpha
+map: dayzOffline.chernarusplus
+product:
+    name: dayz-stable
+    app_id: 223350
+    workshop_app_id: 221100
+    build: "100"
+    dir: /DATA/cache/products/dayz-stable/100
+mission:
+    source:
+        git: https://example.invalid/mission.git
+        ref: main
+        path: dayzOffline.chernarusplus
+    fallback: dayzOffline.chernarusplus
+    unmanaged:
+        - expansion/**
+    drift: warn-backup-overwrite
+paths:
+    root: /DATA/instances/alpha
+    pristine: /DATA/instances/alpha/servermpmissions/dayzOffline.chernarusplus
+    live: /DATA/instances/alpha/mpmissions/dayzOffline.chernarusplus
+    manifest: /DATA/instances/alpha/mpmissions/.dzo-manifest.json
+    filehistory: /DATA/instances/alpha/filehistory
+    profiles: /DATA/instances/alpha/profiles
+    runtime: /DATA/instances/alpha/runtime
+ports:
+    game: 2302
+    rcon: 2303
+    query: 27016
+network: host
+image: localhost/dzo-runtime:test
+params:
+    cpuCount: "4"
+    limitFPS: 60
+    extra:
+        - -netlog
+mods:
+    - id: 1559212036
+      name: '@1559212036'
+      generation: "111"
+      dir: /DATA/cache/workshop/221100/1559212036/111
+    - id: 1828439124
+      server: true
+      name: '@1828439124'
+      generation: "222"
+      dir: /DATA/cache/workshop/221100/1828439124/222
+overlays:
+    - login-times
+updates:
+    policy: auto
+    check_interval: 1h0m0s
+restarts:
+    schedule:
+        - '*-*-* 00/4:00'
+    announce:
+        minutes: 30
+        lock: 3
+        delay: 3
+health:
+    startup_timeout: 30m0s
+    interval: 1m0s
+    retries: 5
+restart_limit:
+    burst: 5
+    interval: 30m0s
+notify: {}
+container:
+    env:
+        LANG: C
+hooks: {}
+---
+[Unit]
+Description=DayZ server alpha (dzo)
+StartLimitBurst=5
+StartLimitIntervalSec=30m
+
+[Container]
+Image=localhost/dzo-runtime:test
+ContainerName=dzo-alpha
+Network=host
+Volume=/usr/bin/dzo:/usr/local/bin/dzo:ro
+Volume=/DATA/cache/products/dayz-stable/100:/dayz:ro
+Volume=/DATA/instances/alpha/runtime/keys:/dayz/keys:ro
+Volume=/DATA/instances/alpha/mpmissions:/dayz/mpmissions
+Volume=/DATA/instances/alpha/profiles:/profiles
+Volume=/DATA/instances/alpha/runtime/serverDZ.cfg:/profiles/serverDZ.cfg:ro
+Volume=/DATA/cache/workshop/221100/1559212036/111:/dayz/@1559212036:ro
+Volume=/DATA/cache/workshop/221100/1828439124/222:/dayz/@1828439124:ro
+Environment=LANG=C
+WorkingDir=/dayz
+Exec=./DayZServer -config=/profiles/serverDZ.cfg -port=2302 -profiles=/profiles -BEpath=/profiles/battleye -mod=@1559212036 -servermod=@1828439124 -cpuCount=4 -limitFPS=60 -netlog
+HealthCmd=/usr/local/bin/dzo health live --query 127.0.0.1:27016
+HealthInterval=1m
+HealthRetries=5
+HealthOnFailure=kill
+HealthStartupCmd=/usr/local/bin/dzo health startup --query 127.0.0.1:27016
+HealthStartupInterval=30s
+HealthStartupRetries=60
+HealthStartupSuccess=1
+Notify=healthy
+ContainerStopTimeout=2m
+
+[Service]
+ExecStartPre=/usr/bin/dzo instance render alpha
+Restart=always
+RestartSec=15s
+TimeoutStartSec=45m
+
+[Install]
+WantedBy=default.target

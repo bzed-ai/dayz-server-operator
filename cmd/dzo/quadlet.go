@@ -45,11 +45,13 @@ type quadletVolFile struct {
 }
 
 type quadletHealthFile struct {
-	Cmd         string `yaml:"cmd"`
-	Interval    string `yaml:"interval"`
-	StartPeriod string `yaml:"start_period"`
-	Retries     int    `yaml:"retries"`
-	OnFailure   string `yaml:"on_failure"`
+	Cmd             string `yaml:"cmd"`
+	Interval        string `yaml:"interval"`
+	StartupCmd      string `yaml:"startup_cmd"`
+	StartupInterval string `yaml:"startup_interval"`
+	StartupRetries  int    `yaml:"startup_retries"`
+	Retries         int    `yaml:"retries"`
+	OnFailure       string `yaml:"on_failure"`
 }
 
 func (f quadletSpecFile) toSpec() (quadlet.ContainerSpec, error) {
@@ -74,16 +76,18 @@ func (f quadletSpecFile) toSpec() (quadlet.ContainerSpec, error) {
 		if err != nil {
 			return spec, fmt.Errorf("health.interval: %w", err)
 		}
-		startPeriod, err := parseDurationOrEmpty(f.Health.StartPeriod)
+		startupInterval, err := parseDurationOrEmpty(f.Health.StartupInterval)
 		if err != nil {
-			return spec, fmt.Errorf("health.start_period: %w", err)
+			return spec, fmt.Errorf("health.startup_interval: %w", err)
 		}
 		spec.Health = quadlet.Health{
-			Cmd:         f.Health.Cmd,
-			Interval:    interval,
-			StartPeriod: startPeriod,
-			Retries:     f.Health.Retries,
-			OnFailure:   f.Health.OnFailure,
+			Cmd:             f.Health.Cmd,
+			Interval:        interval,
+			Retries:         f.Health.Retries,
+			OnFailure:       f.Health.OnFailure,
+			StartupCmd:      f.Health.StartupCmd,
+			StartupInterval: startupInterval,
+			StartupRetries:  f.Health.StartupRetries,
 		}
 	}
 	stopTimeout, err := parseDurationOrEmpty(f.StopTimeout)

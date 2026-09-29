@@ -1,0 +1,16 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: alpha
+product: dayz-stable
+map: dayzOffline.chernarusplus
+mission_source: {preset: vanilla}
+fallback_mission: dayzOffline.chernarusplus
+mission: {unmanaged: ["expansion/**"]}
+ports: {game: 2302, rcon: 2303, query: 27016}
+network: host
+params: {cpuCount: "4", limitFPS: 60, extra: ["-netlog"]}
+mods:
+  - {id: 1559212036}
+  - {id: 1828439124, server: true}
+overlays: [login-times]
+updates: {policy: auto}

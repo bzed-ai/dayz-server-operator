@@ -23,7 +23,9 @@ environment:
 health:
   cmd: /usr/local/bin/dzo health startup
   interval: 60s
-  start_period: 45m
+  startup_cmd: /usr/local/bin/dzo health startup
+  startup_interval: 30s
+  startup_retries: 90
   retries: 5
 stop_timeout: 30s
 `
@@ -39,7 +41,7 @@ func TestQuadletRender(t *testing.T) {
 	if err != nil {
 		t.Fatalf("quadlet render: %v", err)
 	}
-	for _, want := range []string{"Image=localhost/dzo-runtime:latest", "Network=host", "HealthRetries=5", "ContainerStopTimeout=30s"} {
+	for _, want := range []string{"Image=localhost/dzo-runtime:latest", "Network=host", "HealthRetries=5", "ContainerStopTimeout=30s", "HealthStartupRetries=90"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}

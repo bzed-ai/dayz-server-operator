@@ -41,3 +41,9 @@ func ModGenerationID(timeUpdated int64, retry int) string {
 	}
 	return id
 }
+
+// LocalModStore is the store of a local servermod's content-hashed
+// generations, cache/local/<name>/ (§C7, D37).
+func LocalModStore(cacheRoot, name string) *cache.Store {
+	return cache.New(filepath.Join(cacheRoot, "local", name))
+}

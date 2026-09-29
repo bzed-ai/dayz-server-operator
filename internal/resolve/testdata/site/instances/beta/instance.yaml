@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: beta
+product: dayz-experimental
+map: empty.beta
+mission_source: {git: "https://example.invalid/beta.git", ref: v1, path: empty.beta}
+ports: {game: 2402, rcon: 2403, query: 27116}
+network: publish
+mods:
+  - {local: dzo-admin, server: true}
+container:
+  memory: 24G
+  mounts: ["/var/lib/GeoIP:/var/lib/GeoIP:ro"]
+notify: {discord: []}

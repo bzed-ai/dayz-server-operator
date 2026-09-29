@@ -27,6 +27,7 @@ type Paths struct {
 	Cache     string `yaml:"cache"`
 	Secrets   string `yaml:"secrets"`
 	DB        string `yaml:"db"`
+	Site      string `yaml:"site"` // checkout of the site config repo
 }
 
 // Site describes the site config repo (D16): shared mod integrations and
@@ -55,6 +56,12 @@ type Product struct {
 	BetaBranch string `yaml:"beta_branch,omitempty"`
 }
 
+// Steam names the Steam account steamcmd logs in with for downloads (§C7);
+// the session itself lives in the steamcmd home (see `dzo steam login`).
+type Steam struct {
+	Account string `yaml:"account"`
+}
+
 // DiscordWebhook is one named Discord notification target (§C9).
 type DiscordWebhook struct {
 	Name string `yaml:"name"`
@@ -71,6 +78,7 @@ type Notify struct {
 type Config struct {
 	Paths    Paths              `yaml:"paths"`
 	Site     Site               `yaml:"site"`
+	Steam    Steam              `yaml:"steam"`
 	Products map[string]Product `yaml:"products"`
 	Notify   Notify             `yaml:"notify"`
 }
@@ -90,6 +98,7 @@ func defaultsTemplated() *Config {
 			Cache:     "${data}/cache",
 			Secrets:   "${data}/secrets",
 			DB:        "${data}/db",
+			Site:      "${data}/site",
 		},
 		Products: map[string]Product{
 			"dayz-stable": {
@@ -154,6 +163,7 @@ func (c *Config) resolvePaths() {
 	c.Paths.Cache = expand(c.Paths.Cache)
 	c.Paths.Secrets = expand(c.Paths.Secrets)
 	c.Paths.DB = expand(c.Paths.DB)
+	c.Paths.Site = expand(c.Paths.Site)
 }
 
 // Validate checks the invariants the rest of dzo relies on: every path is
@@ -170,6 +180,7 @@ func (c *Config) Validate() error {
 		"paths.cache":     c.Paths.Cache,
 		"paths.secrets":   c.Paths.Secrets,
 		"paths.db":        c.Paths.DB,
+		"paths.site":      c.Paths.Site,
 	}
 	for name, p := range pathFields {
 		if p == "" {

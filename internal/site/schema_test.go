@@ -51,7 +51,7 @@ func TestInstanceValidateBadNetwork(t *testing.T) {
 func TestInstanceValidateDuplicateMods(t *testing.T) {
 	i := validInstance()
 	i.Mods = []ModRef{{ID: 1}, {ID: 1}}
-	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate id 1") {
+	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate entry 1") {
 		t.Fatalf("Validate() = %v", err)
 	}
 }
@@ -59,7 +59,7 @@ func TestInstanceValidateDuplicateMods(t *testing.T) {
 func TestInstanceValidateZeroModID(t *testing.T) {
 	i := validInstance()
 	i.Mods = []ModRef{{ID: 0}}
-	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "entry with id 0") {
+	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "exactly one of id or local") {
 		t.Fatalf("Validate() = %v", err)
 	}
 }
@@ -298,5 +298,36 @@ func TestDurationMarshal(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "1m30s") {
 		t.Errorf("Marshal() = %q", out)
+	}
+}
+
+func TestModRefValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		ref     ModRef
+		wantErr string
+	}{
+		{"workshop", ModRef{ID: 5}, ""},
+		{"local servermod", ModRef{Local: "dzo-admin", Server: true}, ""},
+		{"both", ModRef{ID: 5, Local: "x", Server: true}, "exactly one"},
+		{"local client mod", ModRef{Local: "x"}, "server: true"},
+		{"local bad name", ModRef{Local: "-x", Server: true}, "must match"},
+		{"local numeric", ModRef{Local: "123", Server: true}, "purely numeric"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.ref.Validate()
+			if tt.wantErr == "" && err != nil || tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
+				t.Fatalf("Validate() = %v, want %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestInstanceDuplicateLocalMods(t *testing.T) {
+	i := validInstance()
+	i.Mods = []ModRef{{Local: "a", Server: true}, {Local: "a", Server: true}}
+	if err := i.Validate(); err == nil || !strings.Contains(err.Error(), "duplicate entry a") {
+		t.Fatalf("Validate() = %v", err)
 	}
 }

@@ -39,6 +39,7 @@ Where to start
    :caption: Administration
 
    configuration
+   resolved-instance
    missions
    mods-and-updates
    operations

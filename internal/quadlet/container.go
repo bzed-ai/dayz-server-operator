@@ -40,11 +40,16 @@ type Volume struct {
 
 // Health describes the container's startup/liveness probe (FR-18, D18).
 type Health struct {
-	Cmd         string
-	Interval    time.Duration
-	StartPeriod time.Duration
-	Retries     int
-	OnFailure   string // e.g. "kill"; empty omits HealthOnFailure
+	Cmd       string
+	Interval  time.Duration
+	Retries   int
+	OnFailure string // e.g. "kill"; empty omits HealthOnFailure
+
+	// StartupCmd is the probe run until the server first answers (§C5's
+	// HealthStartup* keys); the unit is only "healthy" after it succeeds.
+	StartupCmd      string
+	StartupInterval time.Duration
+	StartupRetries  int
 }
 
 // ContainerSpec is dzo's input to render one instance's .container quadlet.
@@ -61,7 +66,17 @@ type ContainerSpec struct {
 
 	Volumes     []Volume
 	Environment map[string]string
-	Exec        []string // extra arguments appended after the image
+	Exec        []string // command line appended after the image (one Exec= line, quoted)
+	WorkingDir  string   // omitted when empty
+
+	// NotifyHealthy makes the unit "active" only once the health check
+	// passes (Notify=healthy).
+	NotifyHealthy bool
+	// PreStart commands become [Service] ExecStartPre= lines (the in-place
+	// mission render, §C5).
+	PreStart        []string
+	RestartSec      time.Duration // 0 omits
+	TimeoutStartSec time.Duration // 0 omits
 
 	Health Health
 
@@ -155,8 +170,16 @@ func RenderContainer(spec ContainerSpec) (string, error) {
 			kv.set("Environment", k+"="+spec.Environment[k])
 		}
 
-		for _, arg := range spec.Exec {
-			kv.set("Exec", arg)
+		if spec.WorkingDir != "" {
+			kv.set("WorkingDir", spec.WorkingDir)
+		}
+		if len(spec.Exec) > 0 {
+			// Quadlet takes the last Exec= line only, so the command line is one line.
+			words := make([]string, len(spec.Exec))
+			for i, a := range spec.Exec {
+				words[i] = quoteWord(a)
+			}
+			kv.set("Exec", strings.Join(words, " "))
 		}
 
 		if spec.Health.Cmd != "" {
@@ -164,15 +187,25 @@ func RenderContainer(spec ContainerSpec) (string, error) {
 			if spec.Health.Interval > 0 {
 				kv.set("HealthInterval", formatDuration(spec.Health.Interval))
 			}
-			if spec.Health.StartPeriod > 0 {
-				kv.set("HealthStartupTimeout", formatDuration(spec.Health.StartPeriod))
-			}
 			if spec.Health.Retries > 0 {
 				kv.set("HealthRetries", strconv.Itoa(spec.Health.Retries))
 			}
 			if spec.Health.OnFailure != "" {
 				kv.set("HealthOnFailure", spec.Health.OnFailure)
 			}
+		}
+		if spec.Health.StartupCmd != "" {
+			kv.set("HealthStartupCmd", spec.Health.StartupCmd)
+			if spec.Health.StartupInterval > 0 {
+				kv.set("HealthStartupInterval", formatDuration(spec.Health.StartupInterval))
+			}
+			if spec.Health.StartupRetries > 0 {
+				kv.set("HealthStartupRetries", strconv.Itoa(spec.Health.StartupRetries))
+			}
+			kv.set("HealthStartupSuccess", "1")
+		}
+		if spec.NotifyHealthy {
+			kv.set("Notify", "healthy")
 		}
 
 		if spec.Memory != "" {
@@ -187,7 +220,16 @@ func RenderContainer(spec ContainerSpec) (string, error) {
 	})
 
 	writeSection(&b, "Service", func(kv *kvWriter) {
+		for _, c := range spec.PreStart {
+			kv.set("ExecStartPre", c)
+		}
 		kv.set("Restart", "always")
+		if spec.RestartSec > 0 {
+			kv.set("RestartSec", formatDuration(spec.RestartSec))
+		}
+		if spec.TimeoutStartSec > 0 {
+			kv.set("TimeoutStartSec", formatDuration(spec.TimeoutStartSec))
+		}
 	})
 
 	writeSection(&b, "Install", func(kv *kvWriter) {
@@ -208,6 +250,17 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dm", int64(d/time.Minute))
 	}
 	return fmt.Sprintf("%ds", int64(d/time.Second))
+}
+
+// quoteWord quotes one Exec= word for systemd's command-line syntax when it
+// holds whitespace, quotes, backslashes or ';' (as in -mod=@a;@b), and
+// escapes the '%' and '$' systemd would otherwise expand.
+func quoteWord(w string) string {
+	w = strings.NewReplacer("%", "%%", "$", "$$").Replace(w)
+	if w == "" || strings.ContainsAny(w, " \t\n\"'\\;") {
+		return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(w) + `"`
+	}
+	return w
 }
 
 type kvWriter struct {

@@ -1,0 +1,104 @@
+name: beta
+map: empty.beta
+product:
+    name: dayz-experimental
+    app_id: 1042420
+    workshop_app_id: 221100
+    build: "200"
+    dir: /DATA/cache/products/dayz-experimental/200
+mission:
+    source:
+        git: https://example.invalid/beta.git
+        ref: v1
+        path: empty.beta
+    drift: warn-backup-overwrite
+paths:
+    root: /DATA/instances/beta
+    pristine: /DATA/instances/beta/servermpmissions/empty.beta
+    live: /DATA/instances/beta/mpmissions/empty.beta
+    manifest: /DATA/instances/beta/mpmissions/.dzo-manifest.json
+    filehistory: /DATA/instances/beta/filehistory
+    profiles: /DATA/instances/beta/profiles
+    runtime: /DATA/instances/beta/runtime
+ports:
+    game: 2402
+    rcon: 2403
+    query: 27116
+network: publish
+image: localhost/dzo-runtime:test
+params: {}
+mods:
+    - local: dzo-admin
+      server: true
+      name: '@dzo-admin'
+      generation: abcd
+      dir: /DATA/cache/local/dzo-admin/abcd
+updates:
+    policy: notify
+    check_interval: 1h0m0s
+restarts:
+    schedule:
+        - '*-*-* 00/4:00'
+    announce:
+        minutes: 30
+        lock: 3
+        delay: 3
+health:
+    startup_timeout: 30m0s
+    interval: 1m0s
+    retries: 5
+restart_limit:
+    burst: 5
+    interval: 30m0s
+notify:
+    discord: []
+container:
+    env:
+        LANG: C
+    mounts:
+        - /var/lib/GeoIP:/var/lib/GeoIP:ro
+    memory: 24G
+hooks: {}
+---
+[Unit]
+Description=DayZ server beta (dzo)
+StartLimitBurst=5
+StartLimitIntervalSec=30m
+
+[Container]
+Image=localhost/dzo-runtime:test
+ContainerName=dzo-beta
+PublishPort=2402:2402/udp
+PublishPort=2403:2403/udp
+PublishPort=27116:27116/udp
+Volume=/usr/bin/dzo:/usr/local/bin/dzo:ro
+Volume=/DATA/cache/products/dayz-experimental/200:/dayz:ro
+Volume=/DATA/instances/beta/runtime/keys:/dayz/keys:ro
+Volume=/DATA/instances/beta/mpmissions:/dayz/mpmissions
+Volume=/DATA/instances/beta/profiles:/profiles
+Volume=/DATA/instances/beta/runtime/serverDZ.cfg:/profiles/serverDZ.cfg:ro
+Volume=/DATA/cache/local/dzo-admin/abcd:/dayz/@dzo-admin:ro
+Volume=/var/lib/GeoIP:/var/lib/GeoIP:ro
+Environment=LANG=C
+WorkingDir=/dayz
+Exec=./DayZServer -config=/profiles/serverDZ.cfg -port=2402 -profiles=/profiles -BEpath=/profiles/battleye -servermod=@dzo-admin
+HealthCmd=/usr/local/bin/dzo health live --query 127.0.0.1:27116
+HealthInterval=1m
+HealthRetries=5
+HealthOnFailure=kill
+HealthStartupCmd=/usr/local/bin/dzo health startup --query 127.0.0.1:27116
+HealthStartupInterval=30s
+HealthStartupRetries=60
+HealthStartupSuccess=1
+Notify=healthy
+PodmanArgs=--memory=24G
+ContainerStopTimeout=2m
+
+[Service]
+ExecStartPre=/usr/bin/dzo instance render beta
+Restart=always
+RestartSec=15s
+TimeoutStartSec=45m
+
+[Install]
+WantedBy=default.target

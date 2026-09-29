@@ -50,6 +50,8 @@ Instances
 .. list-table::
    :widths: 45 55
 
+   * - ``dzo instance show <name> [--quadlet]``
+     - print the resolved configuration (see :doc:`resolved-instance`)
    * - ``dzo instance create | apply | remove <name>``
      - create, (re)generate units and timers, remove
    * - ``dzo instance clone <old> <new>``
