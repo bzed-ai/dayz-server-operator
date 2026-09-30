@@ -217,45 +217,25 @@ func (s *Store) GC(keep int) ([]string, error) {
 	}
 	var removed []string
 	err := s.withLock(func() error {
-		entries, err := os.ReadDir(s.Root)
+		ids, err := s.Generations()
 		if err != nil {
-			if os.IsNotExist(err) {
-				return nil
-			}
-			return fmt.Errorf("cache: list %s: %w", s.Root, err)
+			return err
 		}
-		type gen struct {
-			id      string
-			modTime int64
-		}
-		var gens []gen
-		for _, e := range entries {
-			if isReservedName(e.Name()) || !e.IsDir() {
-				continue
-			}
-			info, err := e.Info()
-			if err != nil {
-				continue
-			}
-			gens = append(gens, gen{id: e.Name(), modTime: info.ModTime().UnixNano()})
-		}
-		sort.Slice(gens, func(i, j int) bool { return gens[i].modTime < gens[j].modTime })
-
 		current, err := s.currentLocked()
 		if err != nil {
 			return err
 		}
 
 		keepCount := 0
-		for i := len(gens) - 1; i >= 0; i-- {
-			if keepCount < keep || gens[i].id == current {
+		for i := len(ids) - 1; i >= 0; i-- {
+			if keepCount < keep || ids[i] == current {
 				keepCount++
 				continue
 			}
-			if err := s.removeLocked(gens[i].id); err != nil {
+			if err := s.removeLocked(ids[i]); err != nil {
 				return err
 			}
-			removed = append(removed, gens[i].id)
+			removed = append(removed, ids[i])
 		}
 		return nil
 	})

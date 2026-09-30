@@ -20,8 +20,8 @@ import (
 	"github.com/bzed-ai/dayz-server-operator/internal/site"
 )
 
-// newDetails is the Steam Web API client; tests replace it.
-var newDetails = func() product.DetailsSource { return &product.FileDetailsClient{} }
+// steamDetails looks up workshop file details; tests replace it.
+var steamDetails = (&product.FileDetailsClient{}).GetFileDetails
 
 // installFlags are the flags every command that runs steamcmd shares.
 type installFlags struct {
@@ -37,7 +37,7 @@ func (f *installFlags) installer(cfg *config.Config) (*product.Installer, error)
 	if cfg.Steam.Account == "" {
 		return nil, errors.New("steam.account is not set in config.yaml")
 	}
-	return &product.Installer{CacheRoot: cfg.Paths.Cache, Command: f.steamcmd, Account: cfg.Steam.Account, Details: newDetails()}, nil
+	return &product.Installer{CacheRoot: cfg.Paths.Cache, Command: f.steamcmd, Account: cfg.Steam.Account, Details: steamDetails}, nil
 }
 
 // modSet is the mods to act on: workshop ids per workshop app, and local mods.

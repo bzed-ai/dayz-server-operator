@@ -115,7 +115,7 @@ $ dzo cache list /var/lib/dzo/cache/products/dayz-stable
 * 1234567
   1234600
 
-$ dzo quadlet render instance.yaml > dzo-myserver.container
+$ dzo instance show myserver --quadlet > dzo-myserver.container
 
 $ dzo steam login --user mysteamaccount
 steamcmd password for mysteamaccount: ****

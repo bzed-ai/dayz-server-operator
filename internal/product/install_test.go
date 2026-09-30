@@ -19,7 +19,7 @@ import (
 func newInstaller(t *testing.T, details stubDetails) (*Installer, string) {
 	t.Helper()
 	script, fake := newFakeSteam(t)
-	return &Installer{CacheRoot: t.TempDir(), Command: script, Account: "bob", Details: details}, fake
+	return &Installer{CacheRoot: t.TempDir(), Command: script, Account: "bob", Details: details.get}, fake
 }
 
 func calls(t *testing.T, fake string) []string {
@@ -205,7 +205,7 @@ func TestInstallModsErrors(t *testing.T) {
 	if _, err := in.InstallMods(ctx, 221100, []uint64{1}, false); err == nil {
 		t.Error("a missing steamcmd must fail")
 	}
-	in.Details = failingDetails{}
+	in.Details = failingDetails
 	if _, err := in.InstallMods(ctx, 221100, []uint64{1}, false); err == nil {
 		t.Error("a failing Steam Web API must fail")
 	}
@@ -227,9 +227,7 @@ func TestInstallModsErrors(t *testing.T) {
 	}
 }
 
-type failingDetails struct{}
-
-func (failingDetails) GetFileDetails(context.Context, []uint64) (map[uint64]FileDetails, error) {
+func failingDetails(context.Context, []uint64) (map[uint64]FileDetails, error) {
 	return nil, errors.New("api down")
 }
 

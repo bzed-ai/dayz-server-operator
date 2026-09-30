@@ -31,7 +31,6 @@ func newRootCmd() *cobra.Command {
 		newServerCfgCmd(),
 		newRconCmd(),
 		newCacheCmd(),
-		newQuadletCmd(),
 		newHealthCmd(),
 		newNotifyCmd(),
 		newMissionCmd(),

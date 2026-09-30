@@ -22,15 +22,10 @@
 //   - Snapshot: naming and creating the immutable internal/cache
 //     generations a downloaded build or mod version is stored into.
 //
-// Deliberately out of scope for now, and left as a documented gap rather
-// than half-built: mapping a downloaded mod update to the instances that
-// use it, actually triggering a restart, and garbage-collecting
-// generations no running instance references - all of which need
-// internal/instance (not built yet) to know what instances exist and
-// what they currently reference. Mod dependency (CfgPatches) parsing is
-// internal/moddeps. The forced-refresh steamcmd-cache-invalidation
-// procedure (§C7) needs a verified steamcmd work-dir layout and is not
-// implemented here yet either.
+// Deliberately out of scope: mapping a downloaded mod update to the
+// instances that use it, triggering a restart, and garbage-collecting
+// generations no running instance references. Mod dependency (CfgPatches)
+// parsing is internal/moddeps.
 //
 // Nothing in this package has been exercised against a live Steam
 // account or the real Steam Web API from this environment (no network

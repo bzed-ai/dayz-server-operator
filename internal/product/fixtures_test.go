@@ -109,10 +109,10 @@ func newFakeSteam(t *testing.T) (script, fake string) {
 	return script, fake
 }
 
-// stubDetails is a DetailsSource with fixed answers.
+// stubDetails answers file-details lookups from a fixed map.
 type stubDetails map[uint64]FileDetails
 
-func (s stubDetails) GetFileDetails(_ context.Context, ids []uint64) (map[uint64]FileDetails, error) {
+func (s stubDetails) get(_ context.Context, ids []uint64) (map[uint64]FileDetails, error) {
 	out := map[uint64]FileDetails{}
 	for _, id := range ids {
 		if d, ok := s[id]; ok {

@@ -70,7 +70,7 @@ done
 
 type stubDetails map[uint64]product.FileDetails
 
-func (s stubDetails) GetFileDetails(_ context.Context, ids []uint64) (map[uint64]product.FileDetails, error) {
+func (s stubDetails) get(_ context.Context, ids []uint64) (map[uint64]product.FileDetails, error) {
 	out := map[uint64]product.FileDetails{}
 	for _, id := range ids {
 		if d, ok := s[id]; ok {
@@ -117,9 +117,9 @@ mods:
 `)
 	writeFile(t, filepath.Join(e.data, "site", "localmods", "tools", "addons", "t.pbo"), string(buildPBO("p/t")))
 
-	old := newDetails
-	newDetails = func() product.DetailsSource { return e.details }
-	t.Cleanup(func() { newDetails = old })
+	old := steamDetails
+	steamDetails = e.details.get
+	t.Cleanup(func() { steamDetails = old })
 	return e
 }
 

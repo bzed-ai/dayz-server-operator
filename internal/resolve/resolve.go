@@ -47,12 +47,10 @@ const (
 
 // Product is the instance's server product and the build it is pinned to.
 type Product struct {
-	Name          string `yaml:"name"`
-	AppID         uint32 `yaml:"app_id"`
-	WorkshopAppID uint32 `yaml:"workshop_app_id"`
-	BetaBranch    string `yaml:"beta_branch,omitempty"`
-	Build         string `yaml:"build,omitempty"` // current generation id, "" if not installed
-	Dir           string `yaml:"dir,omitempty"`
+	Name           string `yaml:"name"`
+	config.Product `yaml:",inline"`
+	Build          string `yaml:"build,omitempty"` // current generation id, "" if not installed
+	Dir            string `yaml:"dir,omitempty"`
 }
 
 // Mod is one mod-list entry, in list (= merge precedence) order.
@@ -140,7 +138,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 		Params: raw.Params, Overlays: raw.Overlays, Updates: raw.Updates, Restarts: raw.Restarts,
 		Health: raw.Health, RestartLimit: raw.RestartLimit, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks,
 		Mission: Mission{Source: src, Fallback: raw.FallbackMission, Unmanaged: raw.Mission.Unmanaged, Drift: raw.Mission.Drift},
-		Product: Product{Name: raw.Product, AppID: prod.AppID, WorkshopAppID: prod.WorkshopAppID, BetaBranch: prod.BetaBranch},
+		Product: Product{Name: raw.Product, Product: prod},
 		Paths: Paths{
 			Root:        root,
 			Pristine:    filepath.Join(root, "servermpmissions", raw.Map),

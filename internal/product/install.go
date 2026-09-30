@@ -19,12 +19,6 @@ import (
 	"github.com/bzed-ai/dayz-server-operator/internal/steam"
 )
 
-// DetailsSource is the Steam Web API's file-details lookup (FileDetailsClient
-// in production, a stub in tests).
-type DetailsSource interface {
-	GetFileDetails(ctx context.Context, ids []uint64) (map[uint64]FileDetails, error)
-}
-
 // Installer turns steamcmd downloads and local mod sources into immutable
 // cache generations (§C7). Nothing here ever changes a generation that
 // exists: a new state is a new generation, and "current" is switched last.
@@ -32,7 +26,8 @@ type Installer struct {
 	CacheRoot string
 	Command   string // steamcmd binary; "" means "steamcmd"
 	Account   string
-	Details   DetailsSource
+	// Details looks up Steam file details (FileDetailsClient.GetFileDetails in production).
+	Details func(ctx context.Context, ids []uint64) (map[uint64]FileDetails, error)
 }
 
 // InstallResult is the outcome for one product or mod.
@@ -195,7 +190,7 @@ func tail(s string) string {
 func (in *Installer) InstallMods(ctx context.Context, workshopApp uint32, ids []uint64, force bool) ([]InstallResult, error) {
 	details := map[uint64]FileDetails{}
 	for start := 0; start < len(ids); start += 100 {
-		d, err := in.Details.GetFileDetails(ctx, ids[start:min(start+100, len(ids))])
+		d, err := in.Details(ctx, ids[start:min(start+100, len(ids))])
 		if err != nil {
 			return nil, err
 		}
