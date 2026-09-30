@@ -7,15 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// parseUint64Args parses each of args as a uint64, for a variadic list of
-// numeric ids (workshop item ids).
-// newProductCmd wires the two steamcmd job types internal/product
-// implements (§C7). Resolving a product/mod list from config.yaml and
-// site instances, detecting build ids via app_info_print, and snapshotting
-// a successful download into a cache generation (internal/cache) are left
-// to internal/instance, which knows what instances actually reference -
-// see internal/product's package doc comment. These commands run a job
-// directly against an operator-given install directory.
+// newProductCmd groups the manual server-build downloads (§C7, D7).
 func newProductCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "product",
