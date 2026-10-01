@@ -26,7 +26,10 @@ Install the package
 
 dzo is shipped as a Debian package, ``dzo``. It pulls in ``podman``, ``passt``,
 ``git``, ``uidmap`` and the web libraries from Debian. steamcmd is not installed
-on the host: it runs in a container image that ``dzo setup`` builds.
+on the host. ``dzo setup`` builds a steamcmd container image, but the commands
+that download servers and mods still run the ``steamcmd`` they find in the
+``PATH`` (``--steamcmd`` picks another program, for example a wrapper that runs
+the image).
 
 .. code-block:: sh
 
@@ -37,8 +40,11 @@ The package
 * creates the system user ``dayz`` with the home directory ``/var/lib/dzo``,
 * assigns subordinate uid/gid ranges to it (needed for rootless podman),
 * enables lingering, so the user's services run without a login,
-* installs the documentation, which the web interface serves under ``/docs/``
-  (also readable offline in ``/usr/share/doc/dzo/html/``).
+* installs the Containerfiles of the two images in ``/usr/share/dzo/images/``,
+  the dzo-admin servermod with its ``compat.yaml`` in
+  ``/usr/share/dzo/servermods/``, and example map presets in
+  ``/usr/share/dzo/presets/maps/`` (copy the ones you want to
+  ``integrations/maps/`` in your site repository).
 
 It does **not** start any game server.
 
@@ -62,18 +68,28 @@ everything under ``/var/lib/dzo``. To use another location, for example
 Run the setup
 -------------
 
-Run the setup as the service user. It creates the directories with the right
-permissions, builds the container images, clones the site repository and checks
-the requirements (btrfs, same filesystem for instances
-and snapshots, free space, podman features).
+Run the setup as the service user (it refuses to run as root). It
+
+* creates the directories under ``paths`` (the secrets directory is private) and
+  checks that they are writable, that ``instances`` and ``snapshots`` are on the
+  same filesystem, and warns if ``instances`` is not on btrfs or the free space
+  is low,
+* builds the two container images, ``localhost/dzo-runtime`` for the game
+  servers and ``localhost/dzo-steamcmd``, unless they exist already,
+* tells you if the Steam login is still to be done,
+* clones the site repository from ``site.remote``, and
+* enables a weekly timer, ``dzo-image-refresh.timer``, that rebuilds the images
+  to pick up security updates and removes the old ones.
 
 .. code-block:: sh
 
    sudo -iu dayz dzo setup --dry-run   # show what would be done
    sudo -iu dayz dzo setup
 
-``dzo setup`` reports what is missing, for example the ``user_subvol_rm_allowed``
-mount option.
+Every step reports ``ok``, ``todo`` (what a dry run would do), ``warn`` or
+``error``. Running it again changes nothing that is already in place, so run it
+after an upgrade too. ``dzo setup --images-only`` rebuilds the images right now
+(that is what the timer runs).
 
 Log in to Steam
 ---------------

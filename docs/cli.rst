@@ -14,7 +14,10 @@ Setup and Steam
    :widths: 45 55
 
    * - ``dzo setup [--dry-run]``
-     - create directories, build images, check requirements
+     - first-time setup as the service user: directories, container images, site
+       repo, weekly image refresh timer (see :doc:`installation`)
+   * - ``dzo setup --images-only``
+     - rebuild the container images and prune the old ones
    * - ``dzo steam login [--user <name>] [--passthrough]``
      - interactive Steam login (password and Steam Guard)
    * - ``dzo steam status``

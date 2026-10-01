@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# dzo-steamcmd: Debian's steamcmd package (non-free, needs i386). Its
+# /usr/games/steamcmd wrapper copies Valve's bootstrap to
+# $XDG_DATA_HOME/Steam/steamcmd and steamcmd updates itself there, so the
+# container's home must be a persistent mount (the steamcmd home under the
+# secrets directory), or it downloads the update on every run.
+FROM debian:trixie-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN sed -i /etc/apt/sources.list.d/debian.sources -e 's/^Components: main$/Components: main contrib non-free/' \
+    && dpkg --add-architecture i386 \
+    && echo steam steam/question select "I AGREE" | debconf-set-selections \
+    && echo steam steam/license note '' | debconf-set-selections
+
+RUN apt-get update \
+    && apt-get -y install --no-install-recommends ca-certificates steamcmd \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PATH=/usr/games:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    LANG=C.UTF-8

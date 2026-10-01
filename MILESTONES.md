@@ -80,6 +80,10 @@ Independent of M1-M3; can run in parallel.
 - Acceptance: packaging CI job installs the `.deb` in a clean trixie
   container, runs `dzo version` and `dzo setup --dry-run`.
 
+Status: done. Deviations: images are built with `podman build` (no `.build`
+quadlets), the "default presets" are example map presets, and the install
+commands do not run steamcmd through its image yet. Details in the README.
+
 ## M6: Servermods as submodules, `compat.yaml`  [D39, C14, C16]
 
 - `servermods/dzo-admin` is already a submodule (skeleton). Add
@@ -96,6 +100,10 @@ Independent of M1-M3; can run in parallel.
   `compat.yaml` unless told to.
 - Acceptance: `make deb` from a fresh recursive clone; PBO hash reproducible
   across two builds.
+
+Status: done for dzo-admin, the only servermod there is. MetricZ, LogZ and the
+analyzer are not submodules yet; adding one is a `.gitmodules` entry and a
+`debian/copyright` stanza. `server_build` in `compat.yaml` is filled by M7.
 
 ## M7: `dzo test boot`  [C22]  (dev machines only)
 

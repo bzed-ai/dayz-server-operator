@@ -1,0 +1,20 @@
+# SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# dzo-runtime: the image DayZServer runs in. The server build, the mods and the
+# mission are mounted in by the instance's quadlet, and the health check is the
+# host's /usr/bin/dzo, mounted read-only, so nothing of dzo lives in the image.
+# There is deliberately no ENTRYPOINT: the quadlet's Exec= is the whole command.
+#
+# libcap2, libstdc++6 and libc6 are what the 1.29 server links against
+# (ldd DayZServer); ca-certificates is for the server's and mods' HTTPS calls.
+FROM debian:trixie-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get -y upgrade \
+    && apt-get -y install --no-install-recommends ca-certificates libcap2 libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=C.UTF-8

@@ -16,6 +16,8 @@ Depends:
  git,
  uidmap,
  passt,
+ libjs-htmx,
+ libjs-leaflet,
 Recommends:
  geoipupdate,
  btrfs-progs,
