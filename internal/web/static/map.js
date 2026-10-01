@@ -25,6 +25,18 @@
 
   // ---- map and fit ----
 
+  // A divIcon that holds a DOM element. Leaflet 1.9's divIcon takes one as
+  // html, Debian's 1.7 only takes a string, so build it the way both agree on.
+  var ElIcon = L.DivIcon.extend({
+    createIcon: function (old) {
+      var d = L.DivIcon.prototype.createIcon.call(this, old);
+      d.textContent = '';
+      d.appendChild(this.options.el);
+      return d;
+    }
+  });
+  function elIcon(className, el) { return new ElIcon({ className: className, el: el, html: '', iconSize: [0, 0], iconAnchor: [0, 0] }); }
+
   var meta = null;
   try { meta = el.dataset.meta ? JSON.parse(el.dataset.meta) : null; } catch (e) { meta = null; }
   // The imagery covers [x0, x0+W] x [z0, z0+H] metres. One pixel at zoom z is
@@ -115,7 +127,7 @@
       var s = document.createElement('span');
       s.textContent = String(k / 1000);
       box.appendChild(s);
-      L.marker(d[1], { interactive: false, keyboard: false, icon: L.divIcon({ className: 'gl ' + d[0], html: box, iconSize: [0, 0] }) }).addTo(map);
+      L.marker(d[1], { interactive: false, keyboard: false, icon: elIcon('gl ' + d[0], box) }).addTo(map);
     });
   }
   minor.toggle(map.getZoom() >= minorZ);
@@ -538,7 +550,7 @@
     var root = mk('div', 'pm ' + playerState(p));
     root.appendChild(mk('span', 'pm-dot'));
     root.appendChild(mk('span', 'pm-l', p.name));
-    return L.divIcon({ className: 'pm-wrap', html: root, iconSize: [0, 0], iconAnchor: [0, 0] });
+    return elIcon('pm-wrap', root);
   }
   function playerLines(p) { return [p.steam_id, 'health ' + Math.round(p.health) + (p.alive ? '' : ' (dead)'), 'ping ' + p.ping]; }
 
@@ -598,7 +610,7 @@
   var vm = {};
   function vehicleIcon(v) {
     var root = mk('div', 'vm' + (v.ruined ? ' ruined' : ''));
-    return L.divIcon({ className: 'vm-wrap', html: root, iconSize: [0, 0], iconAnchor: [0, 0] });
+    return elIcon('vm-wrap', root);
   }
   function vehicleLines(v) { return ['health ' + Math.round(v.health * 100) + '%', 'fuel ' + Math.round(v.fuel * 100) + '%', 'crew ' + (v.occupants || []).length]; }
   function onVehicles(list) {
