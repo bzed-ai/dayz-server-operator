@@ -209,7 +209,8 @@ relying on them, roughly in the order they'd bite:
   1.29 script API (every class and method signature checked in the published
   `api.json`) but never compiled or booted, and there is no PBO packing yet
   (M6). Check first: that it compiles (no `SCRIPT (E)`), then the points the
-  signatures cannot show: `RestContext` base URL plus the `mod/v1/sync` request
+  signatures cannot show: implicit float-to-int assignments (`Map.c` ttl),
+  string `Substring`/`Length` use in the glob matcher, `RestContext` base URL plus the `mod/v1/sync` request
   path; that `RestContext` cannot set an `Authorization` header, so the token
   travels in the JSON body; how `JsonSerializer` handles `array<ref ...>` fields
   and unknown keys in the reply; that `PlayerBase.Message` and
