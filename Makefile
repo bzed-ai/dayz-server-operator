@@ -20,7 +20,7 @@ COVERAGE_MIN := 85
 GO           ?= go
 
 .PHONY: all build build-static test test-race cover coverage-check cover-html lint vet fmt fmt-check \
-        licenses reuse deb clean tidy generate
+        licenses reuse deb clean tidy generate servermods
 
 all: lint reuse test build
 
@@ -100,6 +100,11 @@ licenses:
 	go run github.com/google/go-licenses@v1.6.0 check ./... \
 		--allowed_licenses="MIT,BSD-2-Clause,BSD-3-Clause,Apache-2.0,ISC,0BSD" \
 		--ignore $(MODULE)
+
+## servermods: pack servermods/*/src/* into dist/servermods/<mod>/addons/*.pbo
+## (reproducible; needs the submodules: git submodule update --init).
+servermods: build
+	$(BIN_DIR)/$(BINARY) servermods build --src servermods --out $(DIST_DIR)/servermods
 
 ## deb: build the Debian package (requires debhelper, dpkg-dev; see debian/).
 deb:

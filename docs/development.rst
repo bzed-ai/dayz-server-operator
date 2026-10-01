@@ -30,6 +30,7 @@ Modules are vendored, so builds work offline.
 .. code-block:: sh
 
    make build      # static binary
+   make servermods # pack the dzo-admin mod into dist/servermods/ (needs the submodules)
    make test       # tests with race detector and coverage gate
    make lint       # includes reuse lint (licence headers)
    make licenses   # dependency licences must be AGPL-compatible

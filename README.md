@@ -75,7 +75,8 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 | `internal/apiclient` | The Go client of that API, used by the web interface and `dzo player\|vehicle`, so one web interface can talk to several installations |
 | `internal/serve` | `dzo serve`: the API and mod listeners, the mod's `config.json` written at render time |
 | `internal/web` | The web interface (`dzo web`): server-rendered pages, htmx, a Leaflet map; talks to installations only through their API |
-| `servermods/dzo-admin` | The Enforce Script servermod (submodule): state push, admin actions, marker API. Not packed into a PBO or booted yet |
+| `internal/servermods` | `make servermods`: packs `servermods/*/src/*` into reproducible PBOs with a prefix header, using [WoozyMasta/pbo](https://github.com/WoozyMasta/pbo) (MIT) |
+| `servermods/dzo-admin` | The Enforce Script servermod (submodule): state push, admin actions, marker API. Booted headless on 1.29 |
 | `internal/instance` | Ties the above into one instance's lifecycle: the F3 failed-render gate, quadlet+timer materialization, systemd start/stop/restart, and the BattlEye lock/kick graceful-restart sequence |
 | `cmd/dzo` | The CLI wiring all of the above together |
 
@@ -218,8 +219,9 @@ relying on them, roughly in the order they'd bite:
   `spawn_item`, the `players` state and vehicle crew; the `ItemBase` watch hook
   was only exercised through cars. Also unverified: that the container can read
   the 0600 `config.json` and reach `serve.mod_listen` (`127.0.0.1` with host
-  networking, `host.containers.internal` with pasta), and there is still no
-  `make servermods` (M6). Bugs the boot found, now fixed: `proto` and `out` are
+  networking, `host.containers.internal` with pasta), and `compat.yaml` plus the
+  boot-test gate of M6 do not exist yet (`make servermods` does; its PBO, with a
+  text `config.cpp` and no rapify step, boots like the hand-packed one). Bugs the boot found, now fixed: `proto` and `out` are
   reserved words, `EntityAI` cannot be modded (watch rules hook `ItemBase` and
   `CarScript`), `array<ref>.Copy` types, `Substring` throws past the end, and
   the JSON writer turns bools into 0/1, null arrays into `[]` and null objects

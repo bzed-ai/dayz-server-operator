@@ -19,7 +19,7 @@ export CGO_ENABLED = 0
 	dh $@ --buildsystem=makefile
 
 override_dh_auto_build:
-	$(MAKE) build
+	$(MAKE) build servermods
 
 override_dh_auto_test:
 	$(MAKE) cover

@@ -30,14 +30,17 @@ and helicopters are not reported yet.
 Installing it
 ~~~~~~~~~~~~~
 
-dzo-admin is a local server mod, not a Steam Workshop mod. Put it in
-``site.yaml`` and enable it per instance:
+dzo-admin is a local server mod, not a Steam Workshop mod. The dzo package ships
+the packed mod in ``/usr/share/dzo/servermods/dzo-admin`` (a source checkout
+builds it with ``make servermods`` into ``dist/servermods/dzo-admin``; the
+output is reproducible, so the PBO hash is the same on every build). Point
+``site.yaml`` at it and enable it per instance:
 
 .. code-block:: yaml
 
    # site.yaml
    local_mods:
-     dzo-admin: {url: "https://<release host>/dzo-admin-0.1.0.tar.gz", sha256: "<hash>"}
+     dzo-admin: {path: /usr/share/dzo/servermods/dzo-admin}
 
    # instances/deerisle/instance.yaml
    mods:

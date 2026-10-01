@@ -257,3 +257,20 @@ func TestWebCommand(t *testing.T) {
 		t.Fatal("bad listen")
 	}
 }
+
+func TestServermodsBuildCommand(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "servermods")
+	writeFile(t, filepath.Join(src, "demo", "src", "Demo", "$PBOPREFIX$"), "Demo")
+	writeFile(t, filepath.Join(src, "demo", "src", "Demo", "config.cpp"), "class CfgPatches {};\n")
+	out := filepath.Join(t.TempDir(), "out")
+	got, err := runCmd(t, "servermods", "build", "--src", src, "--out", out)
+	if err != nil || !strings.Contains(got, "demo.pbo") || !strings.Contains(got, "prefix Demo") {
+		t.Fatalf("build: %v\n%s", err, got)
+	}
+	if _, err := os.Stat(filepath.Join(out, "demo", "addons", "demo.pbo")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runCmd(t, "servermods", "build", "--src", filepath.Join(t.TempDir(), "none")); err == nil {
+		t.Fatal("no servermods must fail")
+	}
+}

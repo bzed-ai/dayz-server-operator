@@ -44,6 +44,7 @@ func newRootCmd() *cobra.Command {
 		newTokenCmd(),
 		newPlayerCmd(),
 		newVehicleCmd(),
+		newServermodsCmd(),
 	)
 	return root
 }
