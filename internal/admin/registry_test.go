@@ -190,9 +190,13 @@ func TestAudit(t *testing.T) {
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("mode = %v", info.Mode())
 	}
-	bad := NewAudit(filepath.Join(t.TempDir(), "no", "dir", "x"))
-	if bad.Log(AuditEntry{}) == nil {
-		t.Fatal("log into a missing dir must fail")
+	nested := NewAudit(filepath.Join(t.TempDir(), "no", "dir", "x"))
+	if err := nested.Log(AuditEntry{}); err != nil {
+		t.Fatalf("a missing directory must be created: %v", err)
+	}
+	blocked := NewAudit(filepath.Join(a.Path, "x"))
+	if blocked.Log(AuditEntry{}) == nil {
+		t.Fatal("an unusable path must fail")
 	}
 }
 
@@ -255,5 +259,59 @@ func TestWatchRuleValidate(t *testing.T) {
 	}
 	if err := (WatchRule{Layer: "l", Classes: []string{"A"}, Cluster: 50}).Validate(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The mod's JsonSerializer writes bool as 0/1, a missing array as [] and a
+// missing object as {}; this is the shape captured from a real boot.
+func TestModWireShape(t *testing.T) {
+	r, dir := testRegistry(t)
+	if err := os.WriteFile(filepath.Join(dir, "alpha.token"), []byte("tok"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	send := func(body string) int {
+		req := httptest.NewRequest(http.MethodPost, "/mod/v1/sync", strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		r.ModHandler().ServeHTTP(rec, req)
+		return rec.Code
+	}
+	hub, _ := r.Hub("alpha")
+	first := `{"token":"tok","protocol":1,"mod_version":"0.1.0","world":"chernarusplus","seq":0,"hello":1,"has":["players","vehicles"],
+	 "players":[{"steam_id":"1","name":"a","alive":1,"unconscious":0}],"vehicles":[{"id":"v","ruined":0,"engine":1,"occupants":["1"]}],
+	 "markers":[],"layers":[],"events":[],"types":{"hash":"h","offset":0,"total":1,"names":["AKM"]},"results":[{"id":"x","ok":1,"message":""}]}`
+	if c := send(first); c != 200 {
+		t.Fatalf("first sync: %d", c)
+	}
+	p := hub.Players()
+	if len(p) != 1 || !bool(p[0].Alive) || bool(p[0].Unconscious) || p[0].Vehicle != "v" || !bool(hub.Vehicles()[0].Engine) || !hub.Status().Connected {
+		t.Fatalf("state = %+v", p)
+	}
+	// Not due: empty arrays and an empty types object must not wipe state.
+	later := `{"token":"tok","protocol":1,"seq":1,"hello":0,"has":[],"players":[],"vehicles":[],"markers":[],"layers":[],"events":[],"types":{},"results":[]}`
+	if c := send(later); c != 200 {
+		t.Fatalf("second sync: %d", c)
+	}
+	if len(hub.Players()) != 1 || len(hub.Vehicles()) != 1 || len(hub.Types("", 0)) != 1 {
+		t.Fatal("a sync that lists no parts must keep the state")
+	}
+	// A listed part with nothing in it does clear the state.
+	if send(`{"token":"tok","protocol":1,"has":["players"],"players":[]}`); len(hub.Players()) != 0 {
+		t.Fatal("an included empty part must clear it")
+	}
+}
+
+func TestFlag(t *testing.T) {
+	var v struct {
+		A, B, C, D Flag
+	}
+	if err := json.Unmarshal([]byte(`{"A":true,"B":1,"C":0,"D":null}`), &v); err != nil || !bool(v.A) || !bool(v.B) || bool(v.C) || bool(v.D) {
+		t.Fatalf("%+v %v", v, err)
+	}
+	if json.Unmarshal([]byte(`{"A":"yes"}`), &v) == nil || json.Unmarshal([]byte(`{"A":2}`), &v) == nil {
+		t.Fatal("non-boolean values must fail")
+	}
+	b, _ := json.Marshal(struct{ A Flag }{true})
+	if string(b) != `{"A":true}` {
+		t.Fatalf("marshal = %s", b)
 	}
 }

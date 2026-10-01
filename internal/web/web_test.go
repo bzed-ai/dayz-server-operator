@@ -101,7 +101,7 @@ func (e *env) answerCommands(ok bool, msg string) func() {
 		for ctx.Err() == nil {
 			var res []admin.Result
 			for _, c := range e.hub.Sync(admin.SyncRequest{Proto: 1}).Commands {
-				res = append(res, admin.Result{ID: c.ID, OK: ok, Message: msg})
+				res = append(res, admin.Result{ID: c.ID, OK: admin.Flag(ok), Message: msg})
 			}
 			if len(res) > 0 {
 				e.hub.Sync(admin.SyncRequest{Proto: 1, Results: res})

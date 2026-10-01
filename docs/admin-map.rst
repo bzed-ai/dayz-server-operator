@@ -106,7 +106,8 @@ Configure per instance which object classes appear on the map:
        - {layer: ufo_crash, classes: ["UFO_Crash_Site*"], icon: ufo, label: "UFO"}
        - {layer: ai_convoy, classes: ["eAIBase"], icon: ai, cluster: 50}
 
-Subclasses match too, and a ``*`` at the end of a class name matches a prefix.
+Rules apply to items (including fireplaces) and cars; buildings, animals and
+players cannot be watched this way yet. Subclasses match too, and a ``*`` at the end of a class name matches a prefix.
 ``max`` limits the markers of a layer. ``cluster`` is a hint for the map
 display. ``only_if`` is not supported yet and is rejected, so that it is never
 silently ignored.

@@ -205,23 +205,25 @@ relying on them, roughly in the order they'd bite:
   it shallow-fetches `mission_source.ref` with plain `git`; tested against
   local repos only. Fetching a bare commit id needs server support
   (GitHub allows it); branches and tags always work.
-- **The `dzo-admin` mod** (`servermods/dzo-admin`): it was written against the
-  1.29 script API (every class and method signature checked in the published
-  `api.json`) but never compiled or booted, and there is no PBO packing yet
-  (M6). Check first: that it compiles (no `SCRIPT (E)`), then the points the
-  signatures cannot show: implicit float-to-int assignments (`Map.c` ttl),
-  string `Substring`/`Length` use in the glob matcher, `RestContext` base URL plus the `mod/v1/sync` request
-  path; that `RestContext` cannot set an `Authorization` header, so the token
-  travels in the JSON body; how `JsonSerializer` handles `array<ref ...>` fields
-  and unknown keys in the reply; that `PlayerBase.Message` and
-  `NotificationSystem.SendNotificationToPlayerIdentityExtended` reach players
-  from the server (and which icon string works); `GetPersistentID` for
-  vehicles without a saved id; the `defines[]` entry `DZO_ADMIN` being visible
-  to other mods' scripts; the `EntityAI`/`CarScript`/`EffectArea` hooks and
-  their cost; the spawnable class list (`scope == 2` filter, size, chunking);
-  teleport and item creation behaviour; and that the container can read the
-  `profiles/dzo-admin/config.json` (mode 0600) and reach `serve.mod_listen`
-  (`127.0.0.1` with host networking, `host.containers.internal` with pasta).
+- **The `dzo-admin` mod** (`servermods/dzo-admin`): booted headless on a real
+  1.29 `DayZServer` (build 24570360) from a PBO packed with dayz-dev-tools,
+  against the real `dzo serve`: it compiles without `SCRIPT (E)`, the script
+  module counts rise over vanilla (Game 416 to 422, World 2123 to 2125, Mission
+  209 to 210), `DZO_ADMIN` is defined, the `RestApi` POST with the token in the
+  body works, state arrives (43 vehicles, 9 effect areas, 2030 spawnable
+  classes in chunks, file-drop and watch-rule markers), and `vehicle repair`
+  (all five scopes), `vehicle delete`, the refusal paths and the deny list
+  work. Not verified, because they need a connected player: message delivery
+  (`PlayerBase.Message`, the notification call and its icon string), teleport,
+  `spawn_item`, the `players` state and vehicle crew; the `ItemBase` watch hook
+  was only exercised through cars. Also unverified: that the container can read
+  the 0600 `config.json` and reach `serve.mod_listen` (`127.0.0.1` with host
+  networking, `host.containers.internal` with pasta), and there is still no
+  `make servermods` (M6). Bugs the boot found, now fixed: `proto` and `out` are
+  reserved words, `EntityAI` cannot be modded (watch rules hook `ItemBase` and
+  `CarScript`), `array<ref>.Copy` types, `Substring` throws past the end, and
+  the JSON writer turns bools into 0/1, null arrays into `[]` and null objects
+  into `{}`.
 - **`PlayerIdentity` has no IP address**, so `dzo-admin` cannot report one; IPs
   stay a RCon-side topic.
 - **Web interface assets and map**: htmx and Leaflet are served from

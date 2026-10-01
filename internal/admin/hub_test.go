@@ -108,7 +108,7 @@ func TestCommandRoundTrip(t *testing.T) {
 	if r := <-done; !r.OK || r.ID != cmd.ID {
 		t.Fatalf("result = %+v", r)
 	}
-	if r, ok := h.Result(cmd.ID); !ok || !r.OK {
+	if r, ok := h.Result(cmd.ID); !ok || !bool(r.OK) {
 		t.Fatal("Result lookup")
 	}
 	if r := h.Sync(SyncRequest{Proto: 1}); len(r.Commands) != 0 {
@@ -138,7 +138,7 @@ func TestResendAndTimeout(t *testing.T) {
 		t.Fatal("expired command still sent")
 	}
 	r, ok := h.Result(id)
-	if !ok || r.OK || r.Message != ErrTimeout.Error() {
+	if !ok || bool(r.OK) || r.Message != ErrTimeout.Error() {
 		t.Fatalf("result = %+v ok=%v", r, ok)
 	}
 	if _, ok := h.Result("nope"); ok {

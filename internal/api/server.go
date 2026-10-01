@@ -305,7 +305,7 @@ func (s *Server) command(w http.ResponseWriter, r *http.Request, c *call) {
 		writeJSON(w, http.StatusAccepted, ActionResult{ID: res.ID, Pending: true})
 		return
 	}
-	writeJSON(w, 200, ActionResult{ID: res.ID, OK: res.OK, Message: res.Message})
+	writeJSON(w, 200, ActionResult{ID: res.ID, OK: bool(res.OK), Message: res.Message})
 }
 
 // run submits a command, audits it and writes the answer. wait=0 queues it
@@ -348,13 +348,13 @@ func (s *Server) run(w http.ResponseWriter, r *http.Request, c *call, cmd admin.
 		deny(statusFor(err), err)
 		return
 	}
-	entry.OK, entry.Result = res.OK, res.Message
+	entry.OK, entry.Result = bool(res.OK), res.Message
 	_ = s.Audit.Log(entry)
 	code := http.StatusOK
 	if !res.OK {
 		code = http.StatusUnprocessableEntity
 	}
-	writeJSON(w, code, ActionResult{ID: res.ID, OK: res.OK, Message: res.Message})
+	writeJSON(w, code, ActionResult{ID: res.ID, OK: bool(res.OK), Message: res.Message})
 }
 
 func statusFor(err error) int {

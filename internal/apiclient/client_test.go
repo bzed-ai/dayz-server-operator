@@ -41,7 +41,7 @@ func answer(t *testing.T, hub *admin.Hub, ok bool) func() {
 		for ctx.Err() == nil {
 			var res []admin.Result
 			for _, c := range hub.Sync(admin.SyncRequest{Proto: 1}).Commands {
-				res = append(res, admin.Result{ID: c.ID, OK: ok, Message: map[bool]string{true: "", false: "refused"}[ok]})
+				res = append(res, admin.Result{ID: c.ID, OK: admin.Flag(ok), Message: map[bool]string{true: "", false: "refused"}[ok]})
 			}
 			if len(res) > 0 {
 				hub.Sync(admin.SyncRequest{Proto: 1, Results: res})

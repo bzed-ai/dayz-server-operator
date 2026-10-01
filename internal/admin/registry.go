@@ -153,5 +153,6 @@ func (r *Registry) sync(w http.ResponseWriter, req *http.Request) {
 		writeReply(w, http.StatusOK, SyncReply{Error: "protocol mismatch: dzo speaks version " + itoa(ProtocolVersion), Proto: ProtocolVersion})
 		return
 	}
+	in.Normalise()
 	writeReply(w, http.StatusOK, hub.Sync(in))
 }

@@ -47,7 +47,7 @@ type pending struct {
 // Hello is what the mod announced about itself.
 type Hello struct {
 	ModVersion string    `json:"mod_version"`
-	Proto      int       `json:"proto"`
+	Proto      int       `json:"protocol"`
 	World      string    `json:"world"`
 	Since      time.Time `json:"since"`
 }

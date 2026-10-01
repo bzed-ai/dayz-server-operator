@@ -137,7 +137,7 @@ func TestRunEndToEnd(t *testing.T) {
 	addrs := <-ready
 
 	// The mod syncs against the mod listener with the rendered token.
-	body := `{"token":"` + strings.TrimSpace(string(tokenB)) + `","proto":1,"hello":true,"players":[{"steam_id":"7656"}]}`
+	body := `{"token":"` + strings.TrimSpace(string(tokenB)) + `","protocol":1,"hello":true,"players":[{"steam_id":"7656"}]}`
 	resp, err := http.Post("http://"+addrs[1]+"/mod/v1/sync", "application/json", strings.NewReader(body))
 	if err != nil || resp.StatusCode != 200 {
 		t.Fatalf("mod sync: %v %v", resp, err)

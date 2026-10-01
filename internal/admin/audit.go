@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -48,6 +49,9 @@ func (a *Audit) Log(e AuditEntry) error {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if err := os.MkdirAll(filepath.Dir(a.Path), 0o750); err != nil {
+		return err
+	}
 	f, err := os.OpenFile(a.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600) //nolint:gosec // path is operator config
 	if err != nil {
 		return err
