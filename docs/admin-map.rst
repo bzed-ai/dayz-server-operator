@@ -5,8 +5,8 @@ Admin map and the dzo-admin mod
 ===============================
 
 The web interface has a live map of each server: players, vehicles, active
-events and markers from other mods. Clicking the map teleports players, and the
-map offers actions on players and vehicles.
+events and markers from other mods. Dragging a player's icon teleports the player, and
+the context menu of every icon offers its actions.
 
 The dzo-admin server mod
 ------------------------
@@ -76,8 +76,43 @@ once the mod has connected, and the instance page shows "dzo-admin connected".
 Map background
 --------------
 
-The map draws a 1 km grid on a plain background. A background built from the
-map's terrain data is planned but not available yet.
+The map shows the map's own satellite imagery, built by dzo from the game's
+data. Without it the map draws a plain 1 km grid; everything else works the
+same.
+
+The imagery comes from the data PBO of the map, which holds the satellite tiles
+and, for each, the world rectangle it covers. dzo reads the position, the
+orientation and the overlap of every tile from that, so it does not matter which
+corner a map numbers its tiles from, or how large the map is. The PBO is:
+
+* **vanilla maps**: the DayZ *client's* ``worlds_<map>_data.pbo``
+  (``Addons/worlds_chernarusplus_data.pbo``, ``Addons/worlds_enoch_data.pbo`` for
+  Livonia, ``sakhal/Addons/worlds_sakhal_data.pbo``). The dedicated server's
+  copy of these files only has stubs, and dzo refuses it with a message that says
+  so.
+* **modded maps**: the map mod's data PBO, for example DeerIsle's ``Addons/data.pbo``.
+
+.. code-block:: sh
+
+   dzo map tiles build enoch /path/to/DayZ/Addons/worlds_enoch_data.pbo
+   dzo map tiles status
+
+or name the file once in ``/etc/dzo/config.yaml`` (the key is the world name of
+the mission) and run ``dzo map tiles build <map>``:
+
+.. code-block:: yaml
+
+   map_tiles:
+     maps:
+       enoch: {source: /srv/dayz/mapsources/worlds_enoch_data.pbo}
+
+Building takes a few seconds and about 60 MB of disk per map. A
+source that was built before is skipped unless you pass ``--force``; ``dzo map
+tiles status`` says when the source file changed since. Tiles are kept below
+``paths.cache`` and served by ``dzo serve`` to authenticated users only, so
+the web interface shows them to everyone who may see the map, and to nobody
+else. The imagery is Bohemia Interactive's artwork, which is why dzo builds
+it on your host from your own game files and does not ship it.
 
 Active events
 -------------

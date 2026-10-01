@@ -91,8 +91,15 @@ Instance
 
 Live map
    Players, vehicles, active events and marker layers on a map that updates as
-   the server reports. Click the map to teleport a player there. See
-   :doc:`admin-map`.
+   the server reports, on the map's satellite imagery if you built it (see
+   :doc:`admin-map`). The map always fits the window and zooms in to a few
+   pixels per metre; ``Fit`` shows the whole world again. Icons sit exactly on
+   their position. **Drag a player's icon** and drop it to teleport the player
+   there; the crosshair and the coordinate readout show where it will land, and
+   you confirm before anything happens. **Right-click** (or click, or press the
+   menu key on a focused icon) for the actions on a player, vehicle, event or
+   marker; right-click empty ground to teleport a player there. Menu entries
+   you lack the role for are not shown. See :doc:`admin-map`.
 
 Audit log
    Who did what, when, from where (web, CLI or API), and the result. Needs the
@@ -107,4 +114,4 @@ Not available yet
 These are planned and are not part of the web interface today: users with
 passwords and TOTP, single sign-on, the player database (history, sessions,
 Steam profiles, GeoIP), kicks and bans, restart timers and scheduled
-broadcasts, a map background, and editors for server configuration.
+broadcasts, and editors for server configuration.

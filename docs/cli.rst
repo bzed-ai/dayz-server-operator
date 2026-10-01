@@ -158,6 +158,17 @@ Web interface and API
    * - ``dzo token list`` / ``dzo token revoke <id>``
      - list or delete tokens
 
+Map tiles
+---------
+
+.. list-table::
+   :widths: 45 55
+
+   * - ``dzo map tiles build <map> [data.pbo] [--force]``
+     - build the satellite tiles of a map from its data PBO (see :doc:`admin-map`)
+   * - ``dzo map tiles status``
+     - maps with tiles, and whether the source file changed since
+
 Players and vehicles
 --------------------
 

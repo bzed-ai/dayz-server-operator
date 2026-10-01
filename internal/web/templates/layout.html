@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="/static/app.css">
 <script src="/vendor/htmx/htmx.min.js" defer></script>
 </head>
-<body hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
+<body class="{{.Class}}" hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
 <header>
   <a class="brand" href="/">dzo</a>
   <nav>

@@ -4,7 +4,7 @@
 {{with .Data}}
 <h1>Audit log <small>{{.Backend}}</small></h1>
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Entries}}<p>No entries.</p>{{else}}
-<table>
+<div class="scroll"><table>
   <thead><tr><th>Time</th><th>Who</th><th>Via</th><th>Instance</th><th>Action</th><th>Target</th><th>Detail</th><th>Result</th></tr></thead>
   <tbody>
   {{range .Entries}}
@@ -14,7 +14,7 @@
     </tr>
   {{end}}
   </tbody>
-</table>
+</table></div>
 {{end}}
 {{end}}
 {{template "foot" .}}{{end}}

@@ -6,6 +6,7 @@ package web
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -162,7 +163,46 @@ type mapView struct {
 	Backend, Instance string
 	Size              int
 	World             string
+	Role              api.Role
+	TileMap           string // the map's name in the tile route, when it has tiles
+	Meta              string // the tile set's metadata.json
 	Err               string
+}
+
+// tiles relays map tiles from a backend, so the browser never holds an API token.
+func (s *Server) tiles(w http.ResponseWriter, r *http.Request) {
+	b := s.backend(r.PathValue("backend"))
+	if b == nil || !api.ValidTilePath(r.PathValue("map"), r.PathValue("rest")) {
+		http.NotFound(w, r)
+		return
+	}
+	resp, err := s.client(b, r).Tile(r.Context(), r.PathValue("map"), r.PathValue("rest"))
+	if err != nil {
+		http.Error(w, "map tiles are not available", http.StatusBadGateway)
+		return
+	}
+	defer func() { _ = resp.Body.Close() }()
+	for _, h := range []string{"Content-Type", "Cache-Control", "ETag", "Last-Modified", "Content-Length"} {
+		if v := resp.Header.Get(h); v != "" {
+			w.Header().Set(h, v)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
+}
+
+// tileMeta returns the metadata of a map's tile set, or "" if it has none.
+func (s *Server) tileMeta(r *http.Request, c *apiclient.Client, name string) string {
+	resp, err := c.Tile(r.Context(), name, "metadata.json")
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
+	if err != nil || resp.StatusCode != http.StatusOK || !json.Valid(b) {
+		return ""
+	}
+	return string(b)
 }
 
 func (s *Server) mapPage(w http.ResponseWriter, r *http.Request) {
@@ -176,8 +216,18 @@ func (s *Server) mapPage(w http.ResponseWriter, r *http.Request) {
 		v.Err = err.Error()
 	} else if st.Hello != nil {
 		v.World, v.Size = st.Hello.World, mapSize(st.Hello.World)
+		if name := strings.ToLower(st.Hello.World); api.ValidTilePath(name, "metadata.json") {
+			if v.Meta = s.tileMeta(r, c, name); v.Meta != "" {
+				v.TileMap = name
+			}
+		}
 	}
-	s.render(w, "map", s.page(inst+" map", b.Name, v))
+	if info, err := c.Info(r.Context()); err == nil {
+		v.Role = info.Role
+	}
+	pg := s.page(inst+" map", b.Name, v)
+	pg.Class = "map"
+	s.render(w, "map", pg)
 }
 
 func (s *Server) audit(w http.ResponseWriter, r *http.Request) {

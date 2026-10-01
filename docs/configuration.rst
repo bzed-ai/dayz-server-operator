@@ -59,6 +59,10 @@ Operator configuration
      backends:                     # default: this host's own API
        - {name: main, url: "http://127.0.0.1:8080", token_file: /var/lib/dzo/secrets/web.token}
 
+   map_tiles:                      # `dzo map tiles build`, see the admin map page
+     maps:
+       enoch: {source: /srv/dayz/mapsources/worlds_enoch_data.pbo}
+
    exporter:
      listen: ":9464"
      tls: {cert_file: null, key_file: null}

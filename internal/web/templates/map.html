@@ -2,11 +2,11 @@
 {{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
 {{define "map"}}{{template "head" .}}
 {{with .Data}}
-<h1>{{.Instance}} <small>{{.World}}</small></h1>
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{end}}
-<div id="flash"></div>
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
-<div id="map" data-stream="/b/{{.Backend}}/i/{{.Instance}}/stream" data-base="/b/{{.Backend}}/i/{{.Instance}}" data-size="{{.Size}}"></div>
+<div id="map" data-stream="/b/{{.Backend}}/i/{{.Instance}}/stream" data-base="/b/{{.Backend}}/i/{{.Instance}}" data-size="{{.Size}}" data-role="{{.Role}}"{{if .TileMap}} data-tiles="/b/{{.Backend}}/tiles/{{.TileMap}}" data-meta="{{.Meta}}"{{end}}></div>
+<div class="maptitle"><strong>{{.Instance}}</strong>{{if .World}}<span class="mute">{{.World}}</span>{{end}}<a href="/b/{{.Backend}}/i/{{.Instance}}">players and vehicles</a><span class="conn">connection lost, retrying</span></div>
+<div id="flash"></div>
 <script src="/vendor/leaflet/leaflet.js"></script>
 <script src="/static/map.js" defer></script>
 {{end}}

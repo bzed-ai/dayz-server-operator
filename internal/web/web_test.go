@@ -329,3 +329,35 @@ func TestStreamRelay(t *testing.T) {
 		t.Fatalf("down backend: %d", c)
 	}
 }
+
+func TestMapTiles(t *testing.T) {
+	e := newEnv(t, api.RoleViewer)
+	if _, body, _ := e.get("/b/main/i/alpha/map"); strings.Contains(body, "data-tiles") {
+		t.Fatalf("a map without tiles must not announce any: %s", body)
+	}
+	root := t.TempDir()
+	set := filepath.Join(root, "enoch", "abcdef0123456789")
+	if err := os.MkdirAll(filepath.Join(set, "0", "0"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.WriteFile(filepath.Join(set, "metadata.json"), []byte(`{"map":"enoch","hash":"abcdef0123456789"}`), 0o600)
+	_ = os.WriteFile(filepath.Join(set, "0", "0", "0.jpg"), []byte("JPEG"), 0o600)
+	if err := os.Symlink("abcdef0123456789", filepath.Join(root, "enoch", "current")); err != nil {
+		t.Fatal(err)
+	}
+	e.api.TilesDir = root
+
+	_, body, _ := e.get("/b/main/i/alpha/map")
+	if !strings.Contains(body, `data-tiles="/b/main/tiles/enoch"`) || !strings.Contains(body, `data-meta="{&#34;map&#34;:&#34;enoch&#34;`) {
+		t.Fatalf("map page: %s", body)
+	}
+	code, b, hdr := e.get("/b/main/tiles/enoch/abcdef0123456789/0/0/0.jpg")
+	if code != 200 || b != "JPEG" || hdr.Get("Content-Type") != "image/jpeg" || !strings.Contains(hdr.Get("Cache-Control"), "immutable") {
+		t.Fatalf("tile: %d %q %v", code, b, hdr)
+	}
+	for _, p := range []string{"/b/nope/tiles/enoch/metadata.json", "/b/main/tiles/enoch/abcdef0123456789/0/0/0.png", "/b/main/tiles/enoch/abcdef0123456789/0/0/9.jpg"} {
+		if code, _, _ := e.get(p); code != 404 {
+			t.Errorf("%s: want 404, got %d", p, code)
+		}
+	}
+}

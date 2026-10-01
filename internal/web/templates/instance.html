@@ -5,9 +5,9 @@
 <h1>{{.Instance}} <small>{{$.Backend}}</small></h1>
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else}}
 <p>
-  {{if .Status.Connected}}<span class="dot on"></span> dzo-admin connected{{with .Status.Hello}} (mod {{.ModVersion}}, world {{.World}}){{end}}
-  {{else}}<span class="dot"></span> dzo-admin not connected{{end}}
-  · <a href="/b/{{.Backend}}/i/{{.Instance}}/map">live map</a>
+  {{if .Status.Connected}}<span class="dot on"></span>dzo-admin connected{{with .Status.Hello}} (mod {{.ModVersion}}, world {{.World}}){{end}}
+  {{else}}<span class="dot"></span>dzo-admin not connected{{end}}
+  <a class="btn" href="/b/{{.Backend}}/i/{{.Instance}}/map">Open live map</a>
 </p>
 <div id="flash"></div>
 

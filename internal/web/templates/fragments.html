@@ -2,7 +2,7 @@
 {{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
 {{define "players"}}
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Items}}<p>Nobody online.</p>{{else}}
-<table>
+<div class="scroll"><table>
   <thead><tr><th>Name</th><th>Steam ID</th><th>Position</th><th>Health</th><th>Ping</th><th></th></tr></thead>
   <tbody>
   {{range .Items}}
@@ -16,13 +16,13 @@
     </tr>
   {{end}}
   </tbody>
-</table>
+</table></div>
 {{end}}
 {{end}}
 
 {{define "vehicles"}}
 {{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Items}}<p>No vehicles reported.</p>{{else}}
-<table>
+<div class="scroll"><table>
   <thead><tr><th>Class</th><th>Position</th><th>Health</th><th>Fuel</th><th>Crew</th><th></th></tr></thead>
   <tbody>
   {{range .Items}}
@@ -34,12 +34,12 @@
       <td>{{len .Occupants}}</td>
       <td>
         <button hx-post="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/repair" hx-target="#flash" hx-vals='{"scope": "all"}'>Repair</button>
-        <button hx-post="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/delete" hx-target="#flash" hx-confirm="Delete this {{.Type}}?">Delete</button>
+        <button class="danger" hx-post="/b/{{$.Backend}}/i/{{$.Instance}}/vehicles/{{.ID}}/delete" hx-target="#flash" hx-confirm="Delete this {{.Type}}?">Delete</button>
       </td>
     </tr>
   {{end}}
   </tbody>
-</table>
+</table></div>
 {{end}}
 {{end}}
 

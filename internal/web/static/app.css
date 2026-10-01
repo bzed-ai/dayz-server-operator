@@ -1,32 +1,186 @@
 /* SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de> */
 /* SPDX-License-Identifier: AGPL-3.0-or-later */
+
+/* Fonts: Barlow Condensed for names and headings, Source Sans 3 for text.
+   Both are self-hosted, OFL-1.1, subset to Latin. */
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; font-display: swap; src: url(fonts/BarlowCondensed-SemiBold.woff2) format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; font-display: swap; src: url(fonts/BarlowCondensed-Bold.woff2) format("woff2"); }
+@font-face { font-family: "Source Sans 3"; font-weight: 400; font-display: swap; src: url(fonts/SourceSans3-Regular.woff2) format("woff2"); }
+@font-face { font-family: "Source Sans 3"; font-weight: 600; font-display: swap; src: url(fonts/SourceSans3-Semibold.woff2) format("woff2"); }
+
+/* Palette: a survey map under a desk lamp. Flare red is reserved for danger
+   and for things that are down; nothing else is allowed to be red. */
 :root {
-  --bg: #fafafa; --fg: #1c1c1c; --muted: #666; --line: #d8d8d8; --accent: #2a6f4f;
-  --ok-bg: #e3f3e8; --err-bg: #fbe4e4; --head: #ececec;
+  --bg: #e7e3d3;      /* survey paper */
+  --surface: #f1eee2;
+  --ink: #1d2321;     /* wet asphalt */
+  --muted: #3f5a4a;   /* contour ink, text strength */
+  --line: #b9bfae;
+  --head: #1d2321;
+  --head-ink: #e7e3d3;
+  --flare: #c23a22;
+  --signal: #8f6f00;
+  --online: #2a8553;
+  --sea: #c9cdb9;     /* outside the map */
+  --land: #ede9d9;    /* inside the map */
+  --grid-major: #7d8c7a;
+  --grid-minor: #b4bba8;
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --text: "Source Sans 3", system-ui, sans-serif;
+  --hdr: 3rem;
+  --r: 3px;
 }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #17191b; --fg: #e6e6e6; --muted: #9a9a9a; --line: #34383c; --accent: #5cc48f; --ok-bg: #1d3a2b; --err-bg: #44201f; --head: #22262a; }
+  :root {
+    --bg: #1d2321; --surface: #252c29; --ink: #e7e3d3; --muted: #9db3a4; --line: #3a4540;
+    --head: #131716; --head-ink: #e7e3d3;
+    --flare: #f0553a; --signal: #d4b03a; --online: #4dbf82;
+    --sea: #161a19; --land: #222a27; --grid-major: #4f6358; --grid-minor: #333f39;
+  }
 }
+
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
-header { display: flex; gap: 1rem; align-items: center; padding: .6rem 1rem; background: var(--head); border-bottom: 1px solid var(--line); }
-header nav { display: flex; gap: 1rem; flex: 1; }
-.brand { font-weight: 700; color: var(--accent); text-decoration: none; font-size: 1.2rem; }
-.ver { color: var(--muted); font-size: .85rem; }
-a { color: var(--accent); }
-main { padding: 0 1rem 2rem; max-width: 1200px; margin: 0 auto; }
-h1 small, h2 small, h3 small { color: var(--muted); font-weight: 400; font-size: .7em; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 400 1rem/1.5 var(--text); font-variant-numeric: tabular-nums; }
+a { color: inherit; text-decoration-color: var(--muted); text-underline-offset: .18em; }
+a:hover { text-decoration-color: currentColor; }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+header { display: flex; align-items: center; gap: 1.5rem; height: var(--hdr); padding: 0 1rem; background: var(--head); color: var(--head-ink); }
+header a { text-decoration: none; }
+header nav { display: flex; gap: 1.25rem; flex: 1; }
+header nav a:hover { text-decoration: underline; }
+header :focus-visible { outline-color: var(--head-ink); }
+.brand { font: 700 1.6rem/1 var(--display); letter-spacing: .02em; }
+.ver { font-size: .85rem; opacity: .7; }
+
+main { max-width: 72rem; margin: 0 auto; padding: 1rem 1rem 3rem; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; line-height: 1.1; margin: 1.5rem 0 .6rem; }
+h1 { font-size: 2.4rem; margin-top: 1.25rem; }
+h2 { font-size: 1.65rem; }
+h3 { font-size: 1.25rem; }
+small { color: var(--muted); font-family: var(--text); font-weight: 400; }
+h1 small, h2 small, h3 small { font-size: .95rem; margin-left: .5rem; }
+.mute { color: var(--muted); }
+
+.scroll { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
-th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid var(--line); }
-th { background: var(--head); }
-tr.err td { color: #b33; }
-input, select, button { font: inherit; padding: .3rem .5rem; margin: .15rem .1rem; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); }
-button { cursor: pointer; background: var(--accent); color: #fff; border-color: var(--accent); }
-.flash { padding: .4rem .7rem; border-radius: 4px; margin: .4rem 0; }
-.flash.ok { background: var(--ok-bg); }
-.flash.err { background: var(--err-bg); }
-.panel { border: 1px solid var(--line); border-radius: 6px; padding: .5rem 1rem; margin-top: .8rem; }
-.dot { display: inline-block; width: .65rem; height: .65rem; border-radius: 50%; background: #999; }
-.dot.on { background: #2db36b; }
-#map { height: 75vh; min-height: 420px; border: 1px solid var(--line); background: #cfd8c8; }
-@media (max-width: 700px) { header { flex-wrap: wrap; } table { font-size: .85rem; } }
+th, td { text-align: left; padding: .5rem .75rem .5rem 0; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+th { font-weight: 600; color: var(--muted); font-size: .9rem; }
+td:last-child, th:last-child { padding-right: 0; text-align: right; white-space: nowrap; }
+tr.err td { color: var(--flare); }
+
+/* Instance list on the dashboard: one ruled row per instance. A server that
+   is down gets a flare edge. */
+.rows td { padding-block: .7rem; }
+.rows .name { font: 600 1.45rem/1 var(--display); }
+.rows .name a { text-decoration: none; }
+.rows .name a:hover { text-decoration: underline; }
+.rows tr.off td:first-child { box-shadow: inset 4px 0 0 var(--flare); padding-left: .75rem; }
+.rows tr.off .state { color: var(--flare); }
+
+input, select, button, .btn { font: inherit; padding: .35rem .6rem; border: 1px solid var(--ink); border-radius: var(--r); background: var(--surface); color: var(--ink); margin: .15rem .1rem; min-height: 2.2rem; }
+input::placeholder { color: var(--muted); opacity: .8; }
+button, .btn { cursor: pointer; background: var(--ink); color: var(--bg); font-weight: 600; text-decoration: none; display: inline-block; }
+button:hover, .btn:hover { filter: brightness(1.15); }
+button.danger { background: var(--flare); border-color: var(--flare); color: #fff; }
+button.quiet { background: transparent; color: var(--ink); }
+
+.flash { padding: .45rem .75rem; border-radius: var(--r); margin: .4rem 0; border: 1px solid var(--ink); background: var(--surface); border-left-width: 5px; border-left-color: var(--online); }
+.flash.err { border-left-color: var(--flare); }
+.panel { border: 1px solid var(--line); border-radius: var(--r); padding: .25rem 1rem 1rem; margin-top: .8rem; background: var(--surface); }
+
+.dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; background: transparent; border: 2px solid var(--muted); margin-right: .35rem; }
+.dot.on { background: var(--online); border-color: var(--online); animation: live 2.4s ease-in-out infinite; }
+@keyframes live { 50% { box-shadow: 0 0 0 5px transparent; } 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--online) 55%, transparent); } }
+
+/* ---- map page: the map fills everything below the header ---- */
+body.map { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+body.map main { flex: 1; min-height: 0; max-width: none; margin: 0; padding: 0; position: relative; }
+#map { position: absolute; inset: 0; background: var(--sea); font: inherit; outline-offset: -2px; }
+.maptitle { position: absolute; z-index: 1000; top: 10px; left: 10px; max-width: calc(100% - 80px); padding: .3rem .7rem; background: var(--surface); border: 1px solid var(--ink); border-radius: var(--r); display: flex; align-items: baseline; gap: .6rem; }
+.maptitle { flex-wrap: wrap; row-gap: 0; }
+.maptitle a, .maptitle .conn { white-space: nowrap; }
+.maptitle strong { font: 600 1.3rem/1.2 var(--display); }
+.maptitle .conn { display: none; color: var(--flare); font-weight: 600; }
+.stale .conn { display: inline; }
+#flash { position: absolute; z-index: 1100; top: 10px; left: 50%; transform: translateX(-50%); width: min(26rem, calc(100% - 20px)); pointer-events: none; }
+#flash .flash { pointer-events: auto; }
+main > .flash.err { margin: 1rem; }
+
+.leaflet-container { font: inherit; }
+.leaflet-control, .leaflet-bar a, .leaflet-control-layers { color: var(--ink); }
+.leaflet-bar, .leaflet-control-layers, .hud, .leaflet-control-scale-line { background: var(--surface); border: 1px solid var(--ink) !important; border-radius: var(--r) !important; box-shadow: none !important; }
+.leaflet-bar a, .leaflet-bar a:hover { background: var(--surface); color: var(--ink); border-bottom-color: var(--line); width: 2.2rem; height: 2.2rem; line-height: 2.2rem; }
+.leaflet-bar a:hover { background: var(--bg); }
+.leaflet-bar a.fit { font: 600 .85rem/2.2rem var(--text); text-indent: 0; }
+.leaflet-control-layers { padding: .1rem .3rem; }
+.leaflet-control-layers-toggle { width: 2.2rem; height: 2.2rem; }
+.leaflet-control-scale-line { background: var(--surface); color: var(--ink); border-top: 0 !important; padding: 0 .4rem; font-size: .8rem; }
+.hud { padding: .15rem .5rem; font-size: .85rem; min-width: 11rem; }
+.leaflet-tooltip.tt { background: var(--surface); color: var(--ink); border: 1px solid var(--ink); border-radius: var(--r); box-shadow: none; font: inherit; }
+.leaflet-tooltip.tt strong { font: 600 1.1rem/1.2 var(--display); }
+.leaflet-tooltip.tt span { display: block; color: var(--muted); font-size: .85rem; }
+.leaflet-tooltip-right.tt::before { border-right-color: var(--ink); }
+
+/* The world: drawn as SVG paths styled here, so the theme needs no script. */
+.world { fill: var(--land); fill-opacity: 1; stroke: var(--ink); stroke-width: 1.5px; }
+.g-major { stroke: var(--grid-major); stroke-width: 1px; fill: none; }
+.g-minor { stroke: var(--grid-minor); stroke-width: 1px; fill: none; }
+.gl { font-size: .72rem; color: var(--muted); white-space: nowrap; pointer-events: none; }
+.gl span { position: absolute; transform: translate(-50%, 0); padding-top: 4px; }
+.gl.v span { transform: translate(-100%, -50%); padding: 0 5px 0 0; }
+/* Over imagery the grid is white and faint, and the world is just an outline. */
+.tiles .world { fill: none; }
+.tiles .g-major { stroke: #fff; stroke-opacity: .3; }
+.tiles .g-minor { stroke: #fff; stroke-opacity: .12; }
+.tiles .gl { color: #9db3a4; }
+.tiles .pm-dot, .tiles .vm { box-shadow: 0 0 0 2px rgb(255 255 255 / .85); }
+.ev { stroke: var(--flare); fill: var(--flare); fill-opacity: .14; stroke-width: 2px; }
+
+/* Icons. The marker root is 0x0 and sits exactly on the world position; every
+   child is centred on that point with negative offsets, so the centre of the
+   dot is the position and the crosshair shown while dragging passes through it. */
+.pm { position: absolute; left: 0; top: 0; width: 0; height: 0; }
+.pm-dot { position: absolute; left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink); background: var(--online); cursor: grab; }
+.pm-dot::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--ink); }
+.pm.hurt .pm-dot { background: var(--signal); }
+.pm.dead .pm-dot { background: var(--bg); border-style: dashed; }
+.pm.drive .pm-dot { border-radius: 4px; }
+.pm.ro .pm-dot { cursor: pointer; }
+.pm-l { position: absolute; left: 14px; top: -10px; white-space: nowrap; font: 600 .95rem/1.1 var(--display); background: color-mix(in srgb, var(--surface) 88%, transparent); padding: 1px 4px; border-radius: 2px; pointer-events: none; }
+.far .pm-l { display: none; }
+.pm::before, .pm::after { content: ""; position: absolute; background: var(--flare); pointer-events: none; opacity: 0; }
+.pm::before { left: -60px; top: -.5px; width: 120px; height: 1px; }
+.pm::after { left: -.5px; top: -60px; width: 1px; height: 120px; }
+.pm.dragging::before, .pm.dragging::after { opacity: .9; }
+.pm.dragging .pm-dot { cursor: grabbing; border-color: var(--flare); }
+.vm { position: absolute; left: -8px; top: -8px; width: 16px; height: 16px; border: 2px solid var(--signal); background: color-mix(in srgb, var(--signal) 25%, var(--surface)); cursor: pointer; }
+.vm::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; background: var(--ink); }
+.vm.ruined { border-color: var(--muted); background: var(--surface); opacity: .8; }
+
+/* Context menu. */
+.ctx { position: absolute; z-index: 1200; min-width: 14rem; max-width: min(22rem, calc(100% - 8px)); max-height: calc(100% - 8px); overflow-y: auto; background: var(--surface); border: 1px solid var(--ink); border-radius: var(--r); padding: .25rem 0; font-size: .95rem; }
+.ctx[hidden] { display: none; }
+.ctx-h { padding: .3rem .8rem .4rem; border-bottom: 1px solid var(--line); margin-bottom: .2rem; }
+.ctx-h strong { display: block; font: 600 1.25rem/1.15 var(--display); }
+.ctx-h span { display: block; white-space: pre-line; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
+.ctx hr { border: 0; border-top: 1px solid var(--line); margin: .2rem 0; }
+.ctx button[role=menuitem] { display: block; width: 100%; text-align: left; margin: 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); font-weight: 400; padding: .4rem .8rem; min-height: 2.2rem; }
+.ctx button[role=menuitem]:hover, .ctx button[role=menuitem]:focus-visible { background: var(--ink); color: var(--bg); outline: 0; filter: none; }
+.ctx button.danger[role=menuitem] { color: var(--flare); }
+.ctx button.danger[role=menuitem]:hover, .ctx button.danger[role=menuitem]:focus-visible { background: var(--flare); color: #fff; }
+.ctx form { padding: .3rem .8rem .5rem; display: grid; gap: .35rem; }
+.ctx label { display: grid; gap: .1rem; font-size: .85rem; color: var(--muted); }
+.ctx label input, .ctx label select { margin: 0; width: 100%; color: var(--ink); font-size: 1rem; }
+.ctx .pair { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+.ctx .btns { display: flex; gap: .4rem; justify-content: flex-end; margin-top: .2rem; }
+.ctx .btns button { margin: 0; }
+.ctx .filter { margin: .2rem .8rem .4rem; width: calc(100% - 1.6rem); }
+.ctx p { margin: 0; padding: .2rem .8rem; }
+
+@media (max-width: 700px) {
+  header { gap: .8rem; }
+  h1 { font-size: 2rem; }
+  .hud { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .dot.on { animation: none; } }

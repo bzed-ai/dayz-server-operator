@@ -42,7 +42,7 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 > part of the web platform: the `dzo-admin` servermod, the JSON API and a web
 > interface for players, vehicles and a live map. Not built yet: web users
 > with passwords and TOTP, the player/ban database, restart timers and
-> scheduled broadcasts, map tiles, and everything in M5-M9 of
+> scheduled broadcasts, and everything in M5-M9 of
 > [MILESTONES.md](MILESTONES.md). See
 > [Needs live verification](#needs-live-verification) below for what
 > hasn't been checked against a real Steam account or DayZ server, and
@@ -232,7 +232,13 @@ relying on them, roughly in the order they'd bite:
   `web.assets` (`htmx/htmx.min.js`, `leaflet/leaflet.{js,css}` under
   `/usr/share/javascript` is assumed for Debian's `libjs-*`), the CSP allows
   Leaflet's inline styles only, and the world sizes of `sakhal` and unknown
-  maps are guesses. The map has no background tiles.
+  maps are guesses (maps with tiles use the size derived from the tiles).
+- **Map tiles** (`internal/maptiles`) are verified against the client
+  `worlds_*_data.pbo` of Chernarus, Livonia and Sakhal and DeerIsle's
+  `data.pbo` on a development machine (world positions checked against the
+  mission's `mapgrouppos.xml`), not against the automatic client-depot
+  download of the plan, which is not built: the PBO is configured or passed on
+  the command line.
 - **A2S `AppID` truncation** (`internal/a2s`): the wire field is a signed
   16-bit int; real DayZ app ids may wrap. Documented on `InfoResponse`.
 - **The `enfMain` process name** (`internal/health`'s process-existence

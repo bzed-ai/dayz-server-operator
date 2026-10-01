@@ -106,6 +106,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET "+inst+"/vehicles", s.vehiclesFragment)
 	mux.HandleFunc("GET "+inst+"/players/{steamid}/panel", s.playerPanel)
 	mux.HandleFunc("GET "+inst+"/types", s.typesFragment)
+	mux.HandleFunc("GET /b/{backend}/tiles/{map}/{rest...}", s.tiles)
 	mux.HandleFunc("GET "+inst+"/map", s.mapPage)
 	mux.HandleFunc("GET "+inst+"/stream", s.stream)
 	mux.HandleFunc("POST "+inst+"/message", s.act(actMessage))
@@ -175,6 +176,7 @@ type page struct {
 	Backends []*Backend
 	Backend  string
 	Version  string
+	Class    string // body class; "map" makes the page fill the window
 	Data     any
 }
 

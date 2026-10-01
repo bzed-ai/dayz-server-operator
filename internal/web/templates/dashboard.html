@@ -4,24 +4,24 @@
 <h1>Servers</h1>
 {{range .Data}}{{$b := .Name}}
 <section>
-  <h2>{{.Name}}{{with .Info}} <small>{{.Installation}} · dzo {{.Version}} · you are {{.Role}}</small>{{end}}</h2>
+  <h2>{{.Name}}{{with .Info}} <small>installation {{.Installation}}, dzo {{.Version}}, you are {{.Role}}</small>{{end}}</h2>
   {{if .Err}}<p class="flash err">{{.Err}}</p>{{end}}
   {{if .Instances}}
-  <table>
-    <thead><tr><th>Instance</th><th>dzo-admin</th><th>Players</th><th>Vehicles</th><th></th></tr></thead>
+  <div class="scroll"><table class="rows">
+    <thead><tr><th>Instance</th><th>Game server</th><th>Players</th><th>Vehicles</th><th></th></tr></thead>
     <tbody>
     {{range .Instances}}
-      <tr>
-        <td><a href="/b/{{$b}}/i/{{.Instance}}">{{.Instance}}</a></td>
-        <td>{{if .Connected}}<span class="dot on"></span> connected{{else}}<span class="dot"></span> not connected{{end}}</td>
+      <tr{{if not .Connected}} class="off"{{end}}>
+        <td class="name"><a href="/b/{{$b}}/i/{{.Instance}}">{{.Instance}}</a></td>
+        <td class="state">{{if .Connected}}<span class="dot on"></span>connected{{else}}<span class="dot"></span>not connected{{end}}</td>
         <td>{{.Players}}</td>
         <td>{{.Vehicles}}</td>
-        <td><a href="/b/{{$b}}/i/{{.Instance}}/map">map</a></td>
+        <td><a class="btn" href="/b/{{$b}}/i/{{.Instance}}/map">Open map</a></td>
       </tr>
     {{end}}
     </tbody>
-  </table>
-  {{else if not .Err}}<p>No instances.</p>{{end}}
+  </table></div>
+  {{else if not .Err}}<p class="mute">No instances yet. Create one with <code>dzo instance create</code>.</p>{{end}}
 </section>
 {{end}}
 {{template "foot" .}}{{end}}
