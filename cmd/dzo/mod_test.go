@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/bzed-ai/dayz-server-operator/internal/product"
+	"github.com/bzed-ai/dayz-server-operator/internal/servermods"
 )
 
 // buildPBO is a minimal PBO with a prefix header and one file.
@@ -265,5 +266,19 @@ func TestModAdd(t *testing.T) {
 	}
 	if out, err := e.run(t, "mod", "list", "x"); err != nil || !strings.Contains(out, "@222\tserver\t20") {
 		t.Errorf("list = %v\n%s", err, out)
+	}
+}
+
+func TestModUpdateRefusesAShippedServermodThatDiffersFromCompat(t *testing.T) {
+	e := newInstallEnv(t)
+	writeFile(t, filepath.Join(e.data, "site", "localmods", servermods.CompatFile),
+		"dzo: test\nservermods:\n  tools:\n    commit: abc\n    pbos:\n      addons/t.pbo: "+strings.Repeat("0", 64)+"\n")
+
+	out, err := e.run(t, "mod", "update", "x")
+	if err == nil || !strings.Contains(out+err.Error(), "differs from the tested set") {
+		t.Fatalf("a servermod that differs from compat.yaml must be refused: %v\n%s", err, out)
+	}
+	if out, err := e.run(t, "mod", "update", "x", "--ignore-compat"); err != nil || !strings.Contains(out, "tools") {
+		t.Fatalf("--ignore-compat must allow it: %v\n%s", err, out)
 	}
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/bzed-ai/dayz-server-operator/internal/config"
 	"github.com/bzed-ai/dayz-server-operator/internal/product"
 	"github.com/bzed-ai/dayz-server-operator/internal/resolve"
+	"github.com/bzed-ai/dayz-server-operator/internal/servermods"
 	"github.com/bzed-ai/dayz-server-operator/internal/site"
 )
 
@@ -26,11 +27,13 @@ var steamDetails = (&product.FileDetailsClient{}).GetFileDetails
 // installFlags are the flags every command that runs steamcmd shares.
 type installFlags struct {
 	config, steamcmd string
+	ignoreCompat     bool
 }
 
 func (f *installFlags) add(cmd *cobra.Command) {
 	configFlag(cmd, &f.config)
 	cmd.Flags().StringVar(&f.steamcmd, "steamcmd", "steamcmd", "steamcmd binary to run")
+	cmd.Flags().BoolVar(&f.ignoreCompat, "ignore-compat", false, "use a shipped servermod even if its PBOs differ from the tested set in compat.yaml")
 }
 
 func (f *installFlags) installer(cfg *config.Config) (*product.Installer, error) {
@@ -124,6 +127,9 @@ func installMods(cmd *cobra.Command, f *installFlags, cfg *config.Config, t *sit
 		src, err := resolve.LocalSource(t, name)
 		if err != nil {
 			return err
+		}
+		if !f.ignoreCompat {
+			src.Check = servermods.CheckShipped
 		}
 		r, err := in.ImportLocal(cmd.Context(), name, src)
 		r.Err = err

@@ -14,6 +14,26 @@ Comment: This matches the SPDX-FileCopyrightText/SPDX-License-Identifier
  an AGPL-3.0-compatible allow-list (`make licenses`) instead of being
  listed here.
 
+Files: servermods/dzo-admin/*
+Copyright: 2026 Bernd Zeimetz <bernd@bzed.de>
+License: AGPL-3.0-or-later
+Comment: A git submodule, packed into /usr/share/dzo/servermods/dzo-admin by
+ `make servermods`. Add one stanza like this for every servermod under
+ servermods/, with the licence of that repository (MetricZ and LogZ are MIT).
+
+Files: internal/web/static/fonts/BarlowCondensed-*
+Copyright: 2017 The Barlow Project Authors (https://github.com/jpt/barlow)
+License: OFL-1.1
+
+Files: internal/web/static/fonts/SourceSans3-*
+Copyright: 2010-2021, 2023 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'
+License: OFL-1.1
+
+License: OFL-1.1
+ This Font Software is licensed under the SIL Open Font License, Version 1.1.
+ The licence text is in LICENSES/OFL-1.1.txt of the source package, and at
+ https://openfontlicense.org/open-font-license-official-text/ .
+
 License: AGPL-3.0-or-later
  On Debian systems the complete text of the GNU Affero General Public
  License version 3 can be found in

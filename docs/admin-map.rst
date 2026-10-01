@@ -33,8 +33,12 @@ Installing it
 dzo-admin is a local server mod, not a Steam Workshop mod. The dzo package ships
 the packed mod in ``/usr/share/dzo/servermods/dzo-admin`` (a source checkout
 builds it with ``make servermods`` into ``dist/servermods/dzo-admin``; the
-output is reproducible, so the PBO hash is the same on every build). Point
-``site.yaml`` at it and enable it per instance:
+output is reproducible, so the PBO hash is the same on every build). The
+directory also holds ``compat.yaml``, which records the commit of the dzo-admin
+source and the hash of every PBO that was built from it. ``dzo mod add`` and
+``dzo mod update`` check the packed mod against it and refuse a PBO that
+differs; ``--ignore-compat`` uses it anyway, for example for a build of your
+own. Point ``site.yaml`` at it and enable it per instance:
 
 .. code-block:: yaml
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -263,9 +264,20 @@ func TestServermodsBuildCommand(t *testing.T) {
 	writeFile(t, filepath.Join(src, "demo", "src", "Demo", "$PBOPREFIX$"), "Demo")
 	writeFile(t, filepath.Join(src, "demo", "src", "Demo", "config.cpp"), "class CfgPatches {};\n")
 	out := filepath.Join(t.TempDir(), "out")
-	got, err := runCmd(t, "servermods", "build", "--src", src, "--out", out)
+	if _, err := runCmd(t, "servermods", "build", "--src", src, "--out", out); err == nil || !strings.Contains(err.Error(), "commit") {
+		t.Fatalf("a servermod that is not a git checkout has no commit for compat.yaml: %v", err)
+	}
+	for _, args := range [][]string{{"init", "-q"}, {"add", "."}, {"-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "x"}} {
+		if b, err := exec.Command("git", append([]string{"-C", filepath.Join(src, "demo")}, args...)...).CombinedOutput(); err != nil { //nolint:gosec // test
+			t.Fatalf("git %v: %v\n%s", args, err, b)
+		}
+	}
+	got, err := runCmd(t, "servermods", "build", "--src", src, "--out", out, "--server-build", "24570360")
 	if err != nil || !strings.Contains(got, "demo.pbo") || !strings.Contains(got, "prefix Demo") {
 		t.Fatalf("build: %v\n%s", err, got)
+	}
+	if c := readFile(t, filepath.Join(out, "compat.yaml")); !strings.Contains(c, "server_build: \"24570360\"") || !strings.Contains(c, "addons/demo.pbo") {
+		t.Errorf("compat.yaml = %s", c)
 	}
 	if _, err := os.Stat(filepath.Join(out, "demo", "addons", "demo.pbo")); err != nil {
 		t.Fatal(err)

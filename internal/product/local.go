@@ -31,6 +31,10 @@ type LocalSource struct {
 	URL    string
 	SHA256 string
 	HTTP   *http.Client // defaults to http.DefaultClient
+	// Check, if set, is called with the servermod directory before anything is
+	// imported; an error stops the import (the compat.yaml gate of shipped
+	// servermods).
+	Check func(dir string) error
 }
 
 // ImportLocal validates a local servermod and stores it as a content-hashed
@@ -54,6 +58,11 @@ func (in *Installer) ImportLocal(ctx context.Context, name string, src LocalSour
 	}
 	if root, err = modRoot(root); err != nil {
 		return InstallResult{}, err
+	}
+	if src.Check != nil && src.URL == "" {
+		if err := src.Check(root); err != nil {
+			return InstallResult{}, err
+		}
 	}
 	tree := filepath.Join(scratch, "tree")
 	if err := copyRegular(root, tree); err != nil {

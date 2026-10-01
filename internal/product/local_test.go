@@ -269,3 +269,23 @@ func TestSafeJoin(t *testing.T) {
 		}
 	}
 }
+
+func TestImportLocalRunsTheCheckBeforeImporting(t *testing.T) {
+	in := localInstaller(t)
+	src := t.TempDir()
+	writeTree(t, src, modFiles(true))
+	var got string
+	_, err := in.ImportLocal(context.Background(), "tools", LocalSource{Dir: src, Check: func(dir string) error {
+		got = dir
+		return os.ErrPermission
+	}})
+	if err == nil || got != src {
+		t.Fatalf("a failing check must stop the import: err=%v dir=%q", err, got)
+	}
+	if _, err := os.Stat(LocalModStore(in.CacheRoot, "tools").Root); !os.IsNotExist(err) {
+		t.Error("nothing may be stored when the check fails")
+	}
+	if _, err := in.ImportLocal(context.Background(), "tools", LocalSource{Dir: src, Check: func(string) error { return nil }}); err != nil {
+		t.Fatal(err)
+	}
+}
