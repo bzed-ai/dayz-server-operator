@@ -201,3 +201,47 @@ func TestValidateAcceptsGoodDiscordWebhook(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 }
+
+func TestServeAndWebDefaults(t *testing.T) {
+	c := Default()
+	if c.Serve.Listen != "127.0.0.1:8080" || c.Serve.ModListen != "127.0.0.1:2400" || c.Web.Listen != "127.0.0.1:8081" || c.Serve.Installation == "" {
+		t.Fatalf("defaults = %+v %+v", c.Serve, c.Web)
+	}
+}
+
+func TestCheckListen(t *testing.T) {
+	for _, ok := range []string{"127.0.0.1:80", "[::1]:80", "localhost:80"} {
+		if err := CheckListen(ok, false); err != nil {
+			t.Errorf("%s: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"0.0.0.0:80", "example.invalid:80", ":80", "nonsense", "127.0.0.1:"} {
+		if err := CheckListen(bad, false); err == nil {
+			t.Errorf("%s must be refused", bad)
+		}
+	}
+	if err := CheckListen("0.0.0.0:80", true); err != nil {
+		t.Errorf("insecure override: %v", err)
+	}
+	if err := CheckListen("nonsense", true); err == nil {
+		t.Error("a malformed address is refused even with the override")
+	}
+}
+
+func TestValidateListenAndBackends(t *testing.T) {
+	for name, yml := range map[string]string{
+		"serve.listen":     "serve: {listen: '0.0.0.0:8080'}",
+		"serve.mod_listen": "serve: {mod_listen: '10.0.0.1:2400'}",
+		"web.listen":       "web: {listen: ':8081'}",
+		"every entry":      "web: {backends: [{name: a, url: http://x}]}",
+		"duplicate name":   "web: {backends: [{name: a, url: http://x, token_file: /t}, {name: a, url: http://y, token_file: /t}]}",
+	} {
+		if _, err := Parse([]byte(yml)); err == nil || !strings.Contains(err.Error(), name) {
+			t.Errorf("%s: err = %v", name, err)
+		}
+	}
+	good := "serve: {listen: '0.0.0.0:8080', allow_insecure_http: true}\nweb: {backends: [{name: a, url: http://x, token_file: /t}]}"
+	if _, err := Parse([]byte(good)); err != nil {
+		t.Fatal(err)
+	}
+}

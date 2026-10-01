@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+
+	"github.com/bzed-ai/dayz-server-operator/internal/admin"
 )
 
 // Network selects how an instance's ports reach the host (D6), mirroring
@@ -205,6 +207,37 @@ func (m ModRef) Validate() error {
 	return nil
 }
 
+// AdminConfig tunes the dzo-admin mod of one instance (§C16). The mod is
+// enabled by listing {local: dzo-admin, server: true} in mods; zero values
+// mean the mod's defaults (sync every second, players every 5 s, vehicles
+// every 60 s, markers every 10 s, events every 30 s).
+type AdminConfig struct {
+	Disabled     bool     `yaml:"disabled,omitempty"`
+	SyncMS       int      `yaml:"sync_ms,omitempty"`
+	PlayersS     int      `yaml:"players_s,omitempty"`
+	VehiclesS    int      `yaml:"vehicles_s,omitempty"`
+	MarkersS     int      `yaml:"markers_s,omitempty"`
+	EventsS      int      `yaml:"events_s,omitempty"`
+	AllowSpawn   *bool    `yaml:"allow_spawn,omitempty"`
+	AllowClasses []string `yaml:"allow_classes,omitempty"`
+	DenyClasses  []string `yaml:"deny_classes,omitempty"`
+}
+
+// AdminMap is the zero-code marker integration (§C16 path 1).
+type AdminMap struct {
+	Watch []admin.WatchRule `yaml:"watch,omitempty"`
+}
+
+// Validate checks the intervals and watch rules.
+func (a AdminConfig) Validate() error {
+	for name, v := range map[string]int{"sync_ms": a.SyncMS, "players_s": a.PlayersS, "vehicles_s": a.VehiclesS, "markers_s": a.MarkersS, "events_s": a.EventsS} {
+		if v < 0 {
+			return fmt.Errorf("admin.%s must not be negative", name)
+		}
+	}
+	return nil
+}
+
 // Instance is one instances/<name>/instance.yaml (§C3 example).
 type Instance struct {
 	Name            string          `yaml:"name"`
@@ -225,6 +258,8 @@ type Instance struct {
 	Notify          NotifyConfig    `yaml:"notify,omitempty"`
 	Container       ContainerConfig `yaml:"container,omitempty"`
 	Hooks           HooksConfig     `yaml:"hooks,omitempty"`
+	Admin           AdminConfig     `yaml:"admin,omitempty"`
+	AdminMap        AdminMap        `yaml:"admin_map,omitempty"`
 }
 
 // Validate checks the invariants the rest of dzo relies on. It does not
@@ -261,6 +296,14 @@ func (i Instance) Validate() error {
 			errs = append(errs, fmt.Sprintf("mods: duplicate entry %s", m.Key()))
 		}
 		seen[m.Key()] = true
+	}
+	if err := i.Admin.Validate(); err != nil {
+		errs = append(errs, err.Error())
+	}
+	for _, w := range i.AdminMap.Watch {
+		if err := w.Validate(); err != nil {
+			errs = append(errs, "admin_map: "+err.Error())
+		}
 	}
 	switch i.Updates.Policy {
 	case "", PolicyAuto, PolicyNotify, PolicyManual:

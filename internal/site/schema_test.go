@@ -331,3 +331,36 @@ func TestInstanceDuplicateLocalMods(t *testing.T) {
 		t.Fatalf("Validate() = %v", err)
 	}
 }
+
+func TestAdminConfigYAMLAndValidate(t *testing.T) {
+	var inst Instance
+	src := `
+name: a
+admin: {players_s: 2, allow_spawn: false, deny_classes: ["Land_*"]}
+admin_map:
+  watch:
+    - {layer: fire, classes: [FireplaceBase], icon: fire, cluster: 50, max: 100}
+`
+	if err := yaml.Unmarshal([]byte(src), &inst); err != nil {
+		t.Fatal(err)
+	}
+	if inst.Admin.PlayersS != 2 || inst.Admin.AllowSpawn == nil || *inst.Admin.AllowSpawn || len(inst.AdminMap.Watch) != 1 || inst.AdminMap.Watch[0].Cluster != 50 {
+		t.Fatalf("parsed = %+v", inst)
+	}
+	v := validInstance()
+	v.Admin = inst.Admin
+	v.AdminMap = inst.AdminMap
+	if err := v.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	v.Admin.VehiclesS = -1
+	if err := v.Validate(); err == nil || !strings.Contains(err.Error(), "vehicles_s") {
+		t.Fatalf("negative interval: %v", err)
+	}
+	v = validInstance()
+	v.AdminMap.Watch = append(v.AdminMap.Watch, inst.AdminMap.Watch[0])
+	v.AdminMap.Watch[0].OnlyIf = "burning"
+	if err := v.Validate(); err == nil || !strings.Contains(err.Error(), "only_if") {
+		t.Fatalf("only_if must be rejected: %v", err)
+	}
+}

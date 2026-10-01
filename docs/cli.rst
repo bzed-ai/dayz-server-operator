@@ -93,8 +93,8 @@ Mods
      - check and download updates now
    * - ``dzo mod refresh <id>… | --all [--instance <name>] --force``
      - force a fresh download
-   * - ``dzo mod deps <name>``
-     - dependency graph of an instance's mods
+   * - ``dzo mod deps <pbo | config.bin | config.cpp>``
+     - show a mod's declared dependencies (diagnostics, does not affect the load order)
    * - ``dzo integration check <modid>``
      - fetch, normalise and validate a mod's integration files
 
@@ -143,29 +143,46 @@ Monitoring and notifications
    * - ``dzo loki-config``
      - print a log agent configuration snippet
 
-Web users and players
+Web interface and API
 ---------------------
 
 .. list-table::
    :widths: 45 55
 
-   * - ``dzo user list | add | disable | enable <name>``
-     - web users; ``add`` prints a one-time enrolment link
-   * - ``dzo user reset-password | reset-mfa | revoke-sessions <name>``
-     - account recovery
-   * - ``dzo player forget <steamid>``
-     - erase a player's personal data
+   * - ``dzo serve``
+     - run the JSON API and the endpoint the dzo-admin mods call (see :doc:`api`)
+   * - ``dzo web``
+     - run the web interface (see :doc:`web`)
+   * - ``dzo token create <name> --role <role> [--instance <name>…] [--delegate] [--ttl <d>]``
+     - create an API token; the secret is printed once
+   * - ``dzo token list`` / ``dzo token revoke <id>``
+     - list or delete tokens
 
-Maps
-----
+Players and vehicles
+--------------------
+
+These talk to a running ``dzo serve`` through the API. Give them a token with
+``--token-file <file>`` or ``$DZO_TOKEN``; ``--api <url>`` picks the
+installation (default: the local ``serve.listen``). They need the
+:doc:`dzo-admin mod <admin-map>` on the instance.
 
 .. list-table::
    :widths: 45 55
 
-   * - ``dzo map source set <map> <file>`` / ``dzo map source update <map>``
-     - set a map's data PBO, retry the automatic download
-   * - ``dzo map tiles status | update | export <map>``
-     - map tile state, rebuild, export
+   * - ``dzo player list <instance>``
+     - online players
+   * - ``dzo player msg <instance> <steamid|all> <text> [--style chat|important|notification]``
+     - message one player or everyone
+   * - ``dzo player tp <instance> <steamid> (--x <x> --z <z> | --to <steamid>)``
+     - teleport a player
+   * - ``dzo player give <instance> <steamid> <class> [--qty <n>] [--health <0..1>] [--target inventory|hands|ground]``
+     - spawn an item for a player
+   * - ``dzo vehicle list <instance>``
+     - persistent vehicles
+   * - ``dzo vehicle repair <instance> <id> [--scope all|engine|parts|wheels|fluids]``
+     - repair a vehicle
+   * - ``dzo vehicle delete <instance> <id> [--force]``
+     - delete a vehicle (``--force``: even with players inside)
 
 Migration and development
 -------------------------

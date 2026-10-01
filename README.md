@@ -37,10 +37,13 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 > **Status:** Phase 1 (core + CLI) is substantially built: every package
 > below is implemented and tested, up to and including instance lifecycle
 > (quadlet/timer materialization, systemd start/stop/restart, the F3
-> restart-storm brake, the BattlEye graceful-restart sequence). What's not
-> built yet is wiring a *real* site-config instance end to end (resolving
-> its mission/mod/product config into the pieces the packages below take
-> as already-resolved input) and the phase 3+ web platform. See
+> restart-storm brake, the BattlEye graceful-restart sequence), resolving a
+> site-config instance, mission render, mod/product install, and the first
+> part of the web platform: the `dzo-admin` servermod, the JSON API and a web
+> interface for players, vehicles and a live map. Not built yet: web users
+> with passwords and TOTP, the player/ban database, restart timers and
+> scheduled broadcasts, map tiles, and everything in M5-M9 of
+> [MILESTONES.md](MILESTONES.md). See
 > [Needs live verification](#needs-live-verification) below for what
 > hasn't been checked against a real Steam account or DayZ server, and
 > the plan's [phased roadmap](IMPLEMENTATION_PLAN.md#part-e--phased-roadmap)
@@ -65,8 +68,14 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 | `internal/monitor` | Prometheus `/metrics`, JSON `/status`, and Icinga/Nagios-compatible checks |
 | `internal/steam` | The interactive steamcmd login state machine (pty-driven prompt classifier) and a non-interactive mode for scheduled jobs |
 | `internal/product` | The update-window/batching scheduling decision, a Steam Web API mod-freshness client, the steamcmd job runner for `+app_update`/`+workshop_download_item`, and the install flow that turns downloads and local servermods (dir, host path, URL+sha256) into validated immutable generations (`dzo product install\|update`, `dzo mod add\|update\|list\|refresh`) |
-| `internal/moddeps` | CfgPatches `requiredAddons` dependency validation and load-order sorting, from a PBO (rapified `config.bin`, LZSS entries) or a plain-text `config.cpp` |
+| `internal/moddeps` | CfgPatches `requiredAddons` reader for diagnostics (`dzo mod deps\|cfgpatches`), from a PBO (rapified `config.bin`, LZSS entries) or a plain-text `config.cpp`. Not used for ordering: mods load in the order of the `mods` list |
 | `internal/resolve` | Combines `config.yaml`, the site checkout (`site.yaml` defaults + `instance.yaml`) and the cache into one resolved instance, including its quadlet spec; behind `dzo instance show` |
+| `internal/admin` | The operator side of the `dzo-admin` servermod: the versioned JSON protocol, a hub per instance (live world state, a command queue with timeouts and idempotent ids), the token-guarded endpoint the mod calls, marker file drop, the audit log (JSON lines) and spawn limits |
+| `internal/api` | The `/api/v1` JSON API of one installation: scoped bearer tokens with roles, reads, actions (message, teleport, spawn, vehicle repair/delete), server-sent events, audit |
+| `internal/apiclient` | The Go client of that API, used by the web interface and `dzo player\|vehicle`, so one web interface can talk to several installations |
+| `internal/serve` | `dzo serve`: the API and mod listeners, the mod's `config.json` written at render time |
+| `internal/web` | The web interface (`dzo web`): server-rendered pages, htmx, a Leaflet map; talks to installations only through their API |
+| `servermods/dzo-admin` | The Enforce Script servermod (submodule): state push, admin actions, marker API. Not packed into a PBO or booted yet |
 | `internal/instance` | Ties the above into one instance's lifecycle: the F3 failed-render gate, quadlet+timer materialization, systemd start/stop/restart, and the BattlEye lock/kick graceful-restart sequence |
 | `cmd/dzo` | The CLI wiring all of the above together |
 
@@ -123,6 +132,11 @@ login OK
 
 $ dzo mod deps mods/@MyMod/config.cpp --provides DZ_Data,DZ_Scripts --order
 all requiredAddons entries are satisfied
+
+$ dzo token create web --role operator --delegate > /var/lib/dzo/secrets/web.token
+$ dzo serve &                      # /api/v1 and the dzo-admin endpoint
+$ dzo web                          # http://127.0.0.1:8081
+$ dzo player msg myserver all "restart in 5 minutes"
 
 $ dzo instance restart myserver --graceful --rcon-addr 127.0.0.1:2303 --rcon-password s3cret
 ```
@@ -191,6 +205,29 @@ relying on them, roughly in the order they'd bite:
   it shallow-fetches `mission_source.ref` with plain `git`; tested against
   local repos only. Fetching a bare commit id needs server support
   (GitHub allows it); branches and tags always work.
+- **The `dzo-admin` mod** (`servermods/dzo-admin`): it was written against the
+  1.29 script API (every class and method signature checked in the published
+  `api.json`) but never compiled or booted, and there is no PBO packing yet
+  (M6). Check first: that it compiles (no `SCRIPT (E)`), then the points the
+  signatures cannot show: `RestContext` base URL plus the `mod/v1/sync` request
+  path; that `RestContext` cannot set an `Authorization` header, so the token
+  travels in the JSON body; how `JsonSerializer` handles `array<ref ...>` fields
+  and unknown keys in the reply; that `PlayerBase.Message` and
+  `NotificationSystem.SendNotificationToPlayerIdentityExtended` reach players
+  from the server (and which icon string works); `GetPersistentID` for
+  vehicles without a saved id; the `defines[]` entry `DZO_ADMIN` being visible
+  to other mods' scripts; the `EntityAI`/`CarScript`/`EffectArea` hooks and
+  their cost; the spawnable class list (`scope == 2` filter, size, chunking);
+  teleport and item creation behaviour; and that the container can read the
+  `profiles/dzo-admin/config.json` (mode 0600) and reach `serve.mod_listen`
+  (`127.0.0.1` with host networking, `host.containers.internal` with pasta).
+- **`PlayerIdentity` has no IP address**, so `dzo-admin` cannot report one; IPs
+  stay a RCon-side topic.
+- **Web interface assets and map**: htmx and Leaflet are served from
+  `web.assets` (`htmx/htmx.min.js`, `leaflet/leaflet.{js,css}` under
+  `/usr/share/javascript` is assumed for Debian's `libjs-*`), the CSP allows
+  Leaflet's inline styles only, and the world sizes of `sakhal` and unknown
+  maps are guesses. The map has no background tiles.
 - **A2S `AppID` truncation** (`internal/a2s`): the wire field is a signed
   16-bit int; real DayZ app ids may wrap. Documented on `InfoResponse`.
 - **The `enfMain` process name** (`internal/health`'s process-existence

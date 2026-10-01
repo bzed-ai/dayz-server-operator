@@ -1,0 +1,288 @@
+// SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package web
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/bzed-ai/dayz-server-operator/internal/admin"
+	"github.com/bzed-ai/dayz-server-operator/internal/api"
+	"github.com/bzed-ai/dayz-server-operator/internal/apiclient"
+)
+
+type backendView struct {
+	Name      string
+	Info      *api.Info
+	Instances []admin.Status
+	Err       string
+}
+
+func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
+	var views []backendView
+	for _, b := range s.backends {
+		v := backendView{Name: b.Name}
+		c := s.client(b, r)
+		if info, err := c.Info(r.Context()); err != nil {
+			v.Err = err.Error()
+		} else {
+			v.Info = &info
+			if v.Instances, err = c.Instances(r.Context()); err != nil {
+				v.Err = err.Error()
+			}
+		}
+		views = append(views, v)
+	}
+	s.render(w, "dashboard", s.page("Dashboard", "", views))
+}
+
+// target resolves the backend and instance of a request, or answers 404.
+func (s *Server) target(w http.ResponseWriter, r *http.Request) (b *Backend, c *apiclient.Client, inst string, ok bool) {
+	b = s.backend(r.PathValue("backend"))
+	if b == nil {
+		http.NotFound(w, r)
+		return nil, nil, "", false
+	}
+	return b, s.client(b, r), r.PathValue("instance"), true
+}
+
+type instView struct {
+	Backend, Instance string
+	Status            admin.Status
+	Role              api.Role
+	Err               string
+}
+
+func (s *Server) instance(w http.ResponseWriter, r *http.Request) {
+	b, c, inst, ok := s.target(w, r)
+	if !ok {
+		return
+	}
+	v := instView{Backend: b.Name, Instance: inst}
+	var err error
+	if v.Status, err = c.Status(r.Context(), inst); err != nil {
+		v.Err = err.Error()
+	}
+	if info, err := c.Info(r.Context()); err == nil {
+		v.Role = info.Role
+	}
+	s.render(w, "instance", s.page(inst, b.Name, v))
+}
+
+type listView[T any] struct {
+	Backend, Instance string
+	Items             []T
+	Err               string
+}
+
+func (s *Server) playersFragment(w http.ResponseWriter, r *http.Request) {
+	b, c, inst, ok := s.target(w, r)
+	if !ok {
+		return
+	}
+	v := listView[admin.Player]{Backend: b.Name, Instance: inst}
+	var err error
+	if v.Items, err = c.Players(r.Context(), inst); err != nil {
+		v.Err = err.Error()
+	}
+	s.render(w, "players", v)
+}
+
+func (s *Server) vehiclesFragment(w http.ResponseWriter, r *http.Request) {
+	b, c, inst, ok := s.target(w, r)
+	if !ok {
+		return
+	}
+	v := listView[admin.Vehicle]{Backend: b.Name, Instance: inst}
+	var err error
+	if v.Items, err = c.Vehicles(r.Context(), inst); err != nil {
+		v.Err = err.Error()
+	}
+	s.render(w, "vehicles", v)
+}
+
+type panelView struct {
+	Backend, Instance string
+	Player            admin.Player
+	Err               string
+}
+
+// playerPanel is the action form block for one player; it is loaded on
+// demand so the polled player table does not reset open forms.
+func (s *Server) playerPanel(w http.ResponseWriter, r *http.Request) {
+	b, c, inst, ok := s.target(w, r)
+	if !ok {
+		return
+	}
+	v := panelView{Backend: b.Name, Instance: inst}
+	players, err := c.Players(r.Context(), inst)
+	if err != nil {
+		v.Err = err.Error()
+	}
+	for _, p := range players {
+		if p.SteamID == r.PathValue("steamid") {
+			v.Player = p
+		}
+	}
+	if v.Player.SteamID == "" && v.Err == "" {
+		v.Err = "player is not online"
+	}
+	s.render(w, "panel", v)
+}
+
+// typesFragment answers the item picker's search with <option>s for a datalist.
+func (s *Server) typesFragment(w http.ResponseWriter, r *http.Request) {
+	_, c, inst, ok := s.target(w, r)
+	if !ok {
+		return
+	}
+	q := r.URL.Query().Get("type")
+	names, _ := c.Types(r.Context(), inst, q, 30)
+	s.render(w, "types", names)
+}
+
+// mapSizes are the world sizes in metres of the vanilla maps. Unverified for
+// maps other than chernarusplus and enoch; unknown worlds use the default.
+var mapSizes = map[string]int{"chernarusplus": 15360, "enoch": 12800, "sakhal": 15360}
+
+const defaultMapSize = 15360
+
+func mapSize(world string) int {
+	if n, ok := mapSizes[strings.ToLower(world)]; ok {
+		return n
+	}
+	return defaultMapSize
+}
+
+type mapView struct {
+	Backend, Instance string
+	Size              int
+	World             string
+	Err               string
+}
+
+func (s *Server) mapPage(w http.ResponseWriter, r *http.Request) {
+	b, c, inst, ok := s.target(w, r)
+	if !ok {
+		return
+	}
+	v := mapView{Backend: b.Name, Instance: inst, Size: defaultMapSize}
+	st, err := c.Status(r.Context(), inst)
+	if err != nil {
+		v.Err = err.Error()
+	} else if st.Hello != nil {
+		v.World, v.Size = st.Hello.World, mapSize(st.Hello.World)
+	}
+	s.render(w, "map", s.page(inst+" map", b.Name, v))
+}
+
+func (s *Server) audit(w http.ResponseWriter, r *http.Request) {
+	b := s.backend(r.PathValue("backend"))
+	if b == nil {
+		http.NotFound(w, r)
+		return
+	}
+	v := struct {
+		Backend string
+		Entries []admin.AuditEntry
+		Err     string
+	}{Backend: b.Name}
+	var err error
+	if v.Entries, err = s.client(b, r).Audit(r.Context(), r.URL.Query().Get("instance"), 200); err != nil {
+		v.Err = err.Error()
+	}
+	s.render(w, "audit", s.page("Audit log", b.Name, v))
+}
+
+// stream relays an instance's event stream to the browser, so the browser
+// never holds an API token.
+func (s *Server) stream(w http.ResponseWriter, r *http.Request) {
+	_, c, inst, ok := s.target(w, r)
+	if !ok {
+		return
+	}
+	fl, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Accel-Buffering", "no")
+	started := false
+	err := c.Stream(r.Context(), inst, func(kind string, data json.RawMessage) {
+		started = true
+		_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", kind, data)
+		fl.Flush()
+	})
+	if err != nil && !started {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+	}
+}
+
+// ---- actions ----
+
+type flash struct {
+	OK   bool
+	Text string
+}
+
+type actFn func(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error)
+
+// act wraps an action: CSRF check, call the API, answer with a flash box.
+func (s *Server) act(f actFn) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.csrfOK(r) {
+			http.Error(w, "bad CSRF token", http.StatusForbidden)
+			return
+		}
+		_, c, inst, ok := s.target(w, r)
+		if !ok {
+			return
+		}
+		if err := r.ParseForm(); err != nil {
+			s.render(w, "flash", flash{Text: err.Error()})
+			return
+		}
+		res, err := f(r, c, inst)
+		switch {
+		case err != nil:
+			s.render(w, "flash", flash{Text: err.Error()})
+		case res.Pending:
+			s.render(w, "flash", flash{OK: true, Text: "queued"})
+		case !res.OK:
+			s.render(w, "flash", flash{Text: "the game server refused: " + res.Message})
+		default:
+			s.render(w, "flash", flash{OK: true, Text: "done"})
+		}
+	}
+}
+
+func num(r *http.Request, key string) float64 {
+	f, _ := strconv.ParseFloat(strings.TrimSpace(r.PostFormValue(key)), 64)
+	return f
+}
+
+func actMessage(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.Message(r.Context(), inst, r.PathValue("steamid"), r.PostFormValue("text"), r.PostFormValue("style"))
+}
+
+func actTeleport(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.Teleport(r.Context(), inst, r.PathValue("steamid"), num(r, "x"), num(r, "z"), strings.TrimSpace(r.PostFormValue("to")))
+}
+
+func actGive(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.Give(r.Context(), inst, r.PathValue("steamid"), strings.TrimSpace(r.PostFormValue("type")), num(r, "quantity"), num(r, "health"), r.PostFormValue("target"))
+}
+
+func actRepair(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.Repair(r.Context(), inst, r.PathValue("id"), r.PostFormValue("scope"))
+}
+
+func actDelete(r *http.Request, c *apiclient.Client, inst string) (api.ActionResult, error) {
+	return c.DeleteVehicle(r.Context(), inst, r.PathValue("id"), r.PostFormValue("force") == "1")
+}

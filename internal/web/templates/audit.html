@@ -1,0 +1,20 @@
+{{/* SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de> */}}
+{{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
+{{define "audit"}}{{template "head" .}}
+{{with .Data}}
+<h1>Audit log <small>{{.Backend}}</small></h1>
+{{if .Err}}<p class="flash err">{{.Err}}</p>{{else if not .Entries}}<p>No entries.</p>{{else}}
+<table>
+  <thead><tr><th>Time</th><th>Who</th><th>Via</th><th>Instance</th><th>Action</th><th>Target</th><th>Detail</th><th>Result</th></tr></thead>
+  <tbody>
+  {{range .Entries}}
+    <tr class="{{if .OK}}ok{{else}}err{{end}}">
+      <td>{{.Time.Format "2006-01-02 15:04:05"}}</td><td>{{.Actor}}</td><td>{{.Source}}</td><td>{{.Instance}}</td>
+      <td>{{.Action}}</td><td>{{.Target}}</td><td>{{.Detail}}</td><td>{{.Result}}</td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}
+{{end}}
+{{template "foot" .}}{{end}}

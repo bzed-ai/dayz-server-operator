@@ -52,6 +52,7 @@ Where to start
    :caption: Web interface
 
    web
+   api
    admin-map
 
 .. toctree::

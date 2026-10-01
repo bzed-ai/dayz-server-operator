@@ -1,0 +1,331 @@
+// SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+package web
+
+import (
+	"bufio"
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/bzed-ai/dayz-server-operator/internal/admin"
+	"github.com/bzed-ai/dayz-server-operator/internal/api"
+	"github.com/bzed-ai/dayz-server-operator/internal/apiclient"
+)
+
+type env struct {
+	t      *testing.T
+	web    *httptest.Server
+	srv    *Server
+	hub    *admin.Hub
+	api    *api.Server
+	assets string
+}
+
+func newEnv(t *testing.T, role api.Role) *env {
+	t.Helper()
+	dir := t.TempDir()
+	hubs := admin.NewRegistry(dir)
+	hub := hubs.Add(admin.NewHub("alpha"))
+	apiSrv := api.New("site-a", "v0", hubs, api.NewTokenStore(filepath.Join(dir, "t.json")), admin.NewAudit(filepath.Join(dir, "a.jsonl")))
+	ats := httptest.NewServer(apiSrv.Handler())
+	t.Cleanup(ats.Close)
+	secret, _, err := apiSrv.Tokens.Create("web", role, nil, true, time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assets, docs := filepath.Join(dir, "assets"), filepath.Join(dir, "docs")
+	for _, d := range []string{filepath.Join(assets, "htmx"), docs} {
+		if err := os.MkdirAll(d, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_ = os.WriteFile(filepath.Join(assets, "htmx", "htmx.min.js"), []byte("//htmx"), 0o600)
+	_ = os.WriteFile(filepath.Join(docs, "index.html"), []byte("<h1>docs</h1>"), 0o600)
+	srv, err := New([]*Backend{
+		{Name: "main", Client: apiclient.New(ats.URL, secret)},
+		{Name: "down", Client: apiclient.New("http://127.0.0.1:1", "x")},
+	}, Options{Version: "v0", Assets: assets, DocsDir: docs, UserHeader: "X-Forwarded-User"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := httptest.NewServer(srv.Handler())
+	t.Cleanup(ws.Close)
+	hub.Sync(admin.SyncRequest{Proto: 1, Hello: true, ModVersion: "0.1.0", World: "enoch",
+		Players:  []admin.Player{{SteamID: "7656", Name: "<b>alice</b>", Alive: true, X: 1, Z: 2}},
+		Vehicles: []admin.Vehicle{{ID: "1.2.3.4", Type: "OffroadHatchback", Health: 0.5, Fuel: 0.25}},
+		Types:    &admin.TypesChunk{Hash: "h", Total: 2, Names: []string{"AKM", "AK74"}},
+	})
+	return &env{t: t, web: ws, srv: srv, hub: hub, api: apiSrv, assets: assets}
+}
+
+func (e *env) get(path string) (int, string, http.Header) {
+	e.t.Helper()
+	resp, err := http.Get(e.web.URL + path)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(b), resp.Header
+}
+
+func (e *env) post(path string, form url.Values, hdr map[string]string) (int, string) {
+	e.t.Helper()
+	req, _ := http.NewRequest(http.MethodPost, e.web.URL+path, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-CSRF-Token", e.srv.csrf)
+	for k, v := range hdr {
+		req.Header.Set(k, v)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	b, _ := io.ReadAll(resp.Body)
+	return resp.StatusCode, string(b)
+}
+
+func (e *env) answerCommands(ok bool, msg string) func() {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		for ctx.Err() == nil {
+			var res []admin.Result
+			for _, c := range e.hub.Sync(admin.SyncRequest{Proto: 1}).Commands {
+				res = append(res, admin.Result{ID: c.ID, OK: ok, Message: msg})
+			}
+			if len(res) > 0 {
+				e.hub.Sync(admin.SyncRequest{Proto: 1, Results: res})
+			}
+			time.Sleep(time.Millisecond)
+		}
+	}()
+	return cancel
+}
+
+func TestDashboard(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	code, body, hdr := e.get("/")
+	if code != 200 || !strings.Contains(body, "site-a") || !strings.Contains(body, `href="/b/main/i/alpha"`) || !strings.Contains(body, "connected") {
+		t.Fatalf("dashboard: %d %s", code, body)
+	}
+	if !strings.Contains(body, "api: ") && !strings.Contains(body, "down") {
+		t.Fatal("an unreachable backend must be shown with its error")
+	}
+	if !strings.Contains(hdr.Get("Content-Security-Policy"), "default-src 'self'") || hdr.Get("X-Frame-Options") != "DENY" || hdr.Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("security headers: %v", hdr)
+	}
+	if !strings.Contains(body, e.srv.csrf) {
+		t.Fatal("page must carry the CSRF token")
+	}
+	if c, _, _ := e.get("/nope"); c != 404 {
+		t.Fatalf("unknown path: %d", c)
+	}
+}
+
+func TestInstanceAndFragments(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/b/main/i/alpha")
+	if !strings.Contains(body, "dzo-admin connected") || !strings.Contains(body, "world enoch") || !strings.Contains(body, `hx-get="/b/main/i/alpha/players"`) {
+		t.Fatalf("instance page: %s", body)
+	}
+	_, body, _ = e.get("/b/main/i/alpha/players")
+	if !strings.Contains(body, "&lt;b&gt;alice&lt;/b&gt;") || strings.Contains(body, "<b>alice") {
+		t.Fatalf("player names must be escaped: %s", body)
+	}
+	_, body, _ = e.get("/b/main/i/alpha/vehicles")
+	if !strings.Contains(body, "OffroadHatchback") || !strings.Contains(body, "50%") || !strings.Contains(body, "/vehicles/1.2.3.4/repair") {
+		t.Fatalf("vehicles: %s", body)
+	}
+	_, body, _ = e.get("/b/main/i/alpha/players/7656/panel")
+	if !strings.Contains(body, `hx-post="/b/main/i/alpha/players/7656/teleport"`) {
+		t.Fatalf("panel: %s", body)
+	}
+	if _, body, _ = e.get("/b/main/i/alpha/players/9999/panel"); !strings.Contains(body, "not online") {
+		t.Fatalf("panel for an absent player: %s", body)
+	}
+	_, body, _ = e.get("/b/main/i/alpha/types?type=ak")
+	if !strings.Contains(body, `<option value="AKM">`) {
+		t.Fatalf("types: %s", body)
+	}
+	if _, body, _ = e.get("/b/main/i/zzz"); !strings.Contains(body, "unknown instance") {
+		t.Fatalf("unknown instance: %s", body)
+	}
+	if _, body, _ = e.get("/b/main/i/zzz/players"); !strings.Contains(body, "unknown instance") {
+		t.Fatalf("fragment error: %s", body)
+	}
+	for _, p := range []string{"/b/nope/i/alpha", "/b/nope/audit", "/b/nope/i/alpha/map", "/b/nope/i/alpha/players", "/b/nope/i/alpha/vehicles", "/b/nope/i/alpha/types", "/b/nope/i/alpha/stream", "/b/nope/i/alpha/players/1/panel"} {
+		if c, _, _ := e.get(p); c != 404 {
+			t.Fatalf("%s: %d", p, c)
+		}
+	}
+}
+
+func TestMapAndAudit(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	_, body, _ := e.get("/b/main/i/alpha/map")
+	if !strings.Contains(body, `data-size="12800"`) || !strings.Contains(body, `data-stream="/b/main/i/alpha/stream"`) || strings.Contains(body, "<script>") {
+		t.Fatalf("map page: %s", body)
+	}
+	if mapSize("unknown") != defaultMapSize || mapSize("ChernarusPlus") != 15360 {
+		t.Fatal("mapSize")
+	}
+	if c, js, _ := e.get("/static/map.js"); c != 200 || !strings.Contains(js, "EventSource") {
+		t.Fatalf("map.js: %d", c)
+	}
+	if c, _, _ := e.get("/static/app.css"); c != 200 {
+		t.Fatal("app.css")
+	}
+	if _, body, _ := e.get("/b/main/audit"); !strings.Contains(body, "No entries") {
+		t.Fatalf("empty audit: %s", body)
+	}
+	e2 := newEnv(t, api.RoleViewer)
+	if _, body, _ := e2.get("/b/main/audit"); !strings.Contains(body, "audit.view") {
+		t.Fatalf("a viewer must see why the audit is closed: %s", body)
+	}
+}
+
+func TestVendorAndDocs(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	if c, b, _ := e.get("/vendor/htmx/htmx.min.js"); c != 200 || b != "//htmx" {
+		t.Fatalf("vendor: %d %q", c, b)
+	}
+	if c, b, _ := e.get("/docs/"); c != 200 || !strings.Contains(b, "docs") {
+		t.Fatalf("docs: %d", c)
+	}
+	srv, _ := New([]*Backend{{Name: "x", Client: apiclient.New("http://127.0.0.1:1", "t")}}, Options{})
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+	r, err := http.Get(ts.URL + "/docs/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = r.Body.Close()
+	if r.StatusCode != 404 {
+		t.Fatalf("docs without a dir: %d", r.StatusCode)
+	}
+	if _, err := New(nil, Options{}); err == nil {
+		t.Fatal("no backends must fail")
+	}
+}
+
+func TestActions(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	defer e.answerCommands(true, "")()
+	for path, form := range map[string]url.Values{
+		"/b/main/i/alpha/message":                 {"text": {"hi"}, "style": {"chat"}},
+		"/b/main/i/alpha/players/7656/message":    {"text": {"hello"}},
+		"/b/main/i/alpha/players/7656/teleport":   {"x": {"10"}, "z": {"20"}},
+		"/b/main/i/alpha/players/7656/give":       {"type": {"AKM"}, "quantity": {"1"}, "health": {"0.5"}, "target": {"hands"}},
+		"/b/main/i/alpha/vehicles/1.2.3.4/repair": {"scope": {"all"}},
+		"/b/main/i/alpha/vehicles/1.2.3.4/delete": {"force": {"1"}},
+	} {
+		code, body := e.post(path, form, map[string]string{"X-Forwarded-User": "alice@example.invalid"})
+		if code != 200 || !strings.Contains(body, "flash ok") {
+			t.Fatalf("%s: %d %s", path, code, body)
+		}
+	}
+	entries, _ := e.api.Audit.Tail("alpha", 1)
+	if len(entries) != 1 || entries[0].Actor != "web:alice@example.invalid" || entries[0].Source != "web" {
+		t.Fatalf("audit = %+v", entries)
+	}
+	// Without the proxy header the actor is plain "web".
+	e.post("/b/main/i/alpha/message", url.Values{"text": {"x"}}, nil)
+	entries, _ = e.api.Audit.Tail("alpha", 1)
+	if entries[0].Actor != "web:web" {
+		t.Fatalf("actor = %q", entries[0].Actor)
+	}
+}
+
+func TestActionErrors(t *testing.T) {
+	e := newEnv(t, api.RoleViewer)
+	_, body := e.post("/b/main/i/alpha/message", url.Values{"text": {"x"}}, nil)
+	if !strings.Contains(body, "flash err") || !strings.Contains(body, "lacks") {
+		t.Fatalf("forbidden: %s", body)
+	}
+	e2 := newEnv(t, api.RoleAdmin)
+	stop := e2.answerCommands(false, "player not online")
+	defer stop()
+	_, body = e2.post("/b/main/i/alpha/players/1/teleport", url.Values{"x": {"1"}, "z": {"1"}}, nil)
+	if !strings.Contains(body, "refused: player not online") {
+		t.Fatalf("refused: %s", body)
+	}
+}
+
+func TestCSRF(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	defer e.answerCommands(true, "")()
+	post := func(hdr map[string]string, token string) int {
+		req, _ := http.NewRequest(http.MethodPost, e.web.URL+"/b/main/i/alpha/message", strings.NewReader("text=x"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if token != "" {
+			req.Header.Set("X-CSRF-Token", token)
+		}
+		for k, v := range hdr {
+			req.Header.Set(k, v)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode
+	}
+	if c := post(nil, ""); c != 403 {
+		t.Fatalf("no token: %d", c)
+	}
+	if c := post(nil, "wrong"); c != 403 {
+		t.Fatalf("wrong token: %d", c)
+	}
+	if c := post(map[string]string{"Origin": "https://evil.example"}, e.srv.csrf); c != 403 {
+		t.Fatalf("foreign origin: %d", c)
+	}
+	if c := post(map[string]string{"Origin": e.web.URL}, e.srv.csrf); c == 403 {
+		t.Fatalf("same origin must pass: %d", c)
+	}
+	if c := post(map[string]string{"Origin": "::bad"}, e.srv.csrf); c != 403 {
+		t.Fatalf("unparsable origin: %d", c)
+	}
+}
+
+func TestStreamRelay(t *testing.T) {
+	e := newEnv(t, api.RoleAdmin)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, "GET", e.web.URL+"/b/main/i/alpha/stream", nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.Header.Get("Content-Type") != "text/event-stream" {
+		t.Fatalf("content type %q", resp.Header.Get("Content-Type"))
+	}
+	sc := bufio.NewScanner(resp.Body)
+	seen := map[string]bool{}
+	for sc.Scan() {
+		if v, ok := strings.CutPrefix(sc.Text(), "event: "); ok {
+			seen[v] = true
+			if seen["players"] && seen["vehicles"] && seen["markers"] {
+				break
+			}
+		}
+	}
+	if !seen["players"] || !seen["status"] {
+		t.Fatalf("relayed events = %v", seen)
+	}
+	cancel()
+	// A backend that is down answers 502.
+	if c, _, _ := e.get("/b/down/i/alpha/stream"); c != http.StatusBadGateway {
+		t.Fatalf("down backend: %d", c)
+	}
+}

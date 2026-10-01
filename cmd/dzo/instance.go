@@ -17,6 +17,7 @@ import (
 	"github.com/bzed-ai/dayz-server-operator/internal/instance"
 	"github.com/bzed-ai/dayz-server-operator/internal/mission"
 	"github.com/bzed-ai/dayz-server-operator/internal/quadlet"
+	"github.com/bzed-ai/dayz-server-operator/internal/serve"
 )
 
 // newInstanceCmd wires the lifecycle operations internal/instance
@@ -75,7 +76,7 @@ func newInstanceRenderCmd() *cobra.Command {
 		Short: "Update the live mission from the pristine one, in place (--dry-run: only print the plan)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, inst, err := loadInstance(configPath, args[0])
+			cfg, inst, err := loadInstance(configPath, args[0])
 			if err != nil {
 				return err
 			}
@@ -97,8 +98,16 @@ func newInstanceRenderCmd() *cobra.Command {
 				return err
 			}
 			printPlan(cmd, plan)
-			if !dryRun {
-				printReport(cmd, report)
+			if dryRun {
+				return nil
+			}
+			printReport(cmd, report)
+			if inst.AdminEnabled() {
+				// Every render rotates the mod's token (§C13).
+				if err := serve.WriteModConfig(cfg, inst); err != nil {
+					return fmt.Errorf("writing the dzo-admin config: %w", err)
+				}
+				_, _ = fmt.Fprintln(cmd.OutOrStdout(), "dzo-admin config written")
 			}
 			return nil
 		},

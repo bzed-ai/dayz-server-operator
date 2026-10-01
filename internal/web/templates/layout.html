@@ -1,0 +1,28 @@
+{{/* SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de> */}}
+{{/* SPDX-License-Identifier: AGPL-3.0-or-later */}}
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf" content="{{.CSRF}}">
+<title>{{.Title}} · dzo</title>
+<link rel="stylesheet" href="/static/app.css">
+<script src="/vendor/htmx/htmx.min.js" defer></script>
+</head>
+<body hx-headers='{"X-CSRF-Token": "{{.CSRF}}"}'>
+<header>
+  <a class="brand" href="/">dzo</a>
+  <nav>
+    {{range .Backends}}<a href="/b/{{.Name}}/audit">{{.Name}} audit</a>{{end}}
+    <a href="/docs/">docs</a>
+  </nav>
+  <span class="ver">{{.Version}}</span>
+</header>
+<main>
+{{end}}
+{{define "foot"}}</main>
+</body>
+</html>
+{{end}}
+{{define "flash"}}<div class="flash {{if .OK}}ok{{else}}err{{end}}" role="status">{{.Text}}</div>{{end}}

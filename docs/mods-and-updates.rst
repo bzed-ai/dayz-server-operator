@@ -22,13 +22,19 @@ Adding and removing mods
 change is left uncommitted for you to commit). It takes effect at the next
 restart.
 
-Before every start dzo reads the ``CfgPatches`` of all loaded mods and checks
-that every required addon is present. A missing dependency stops the start with
-a clear message instead of a crash loop. ``dzo mod deps deerisle`` shows the
-dependency graph.
+**Load order is the order of the ``mods`` list.** dzo passes the mods to the
+server in exactly that order (``-mod=`` for client mods, ``-servermod=`` for
+server mods) and does not reorder them or check dependencies. Mods often
+provide the same content under different names, so a dependency declared by one
+mod can be met by another with a different name, and dzo cannot tell. Put
+dependencies before the mods that need them, as you would on the command line.
 
-Reading ``config.bin``
-~~~~~~~~~~~~~~~~~~~~~~
+Reading ``config.bin`` (diagnostics only)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The commands below are for looking at a mod's declared dependencies by hand.
+Nothing in dzo depends on them: they do not affect the load order and no start
+is refused because of them.
 
 Mods ship their config as a rapified (binary) ``config.bin``, usually inside
 an LZSS-compressed PBO entry. dzo decodes both itself, so no extra tools are
@@ -170,8 +176,7 @@ When a new build is available you get a Discord message, a warning from
 
       dzo instance upgrade deerisle --build <buildid> --dry-run
 
-   This shows the render plan and checks the mod dependencies against the new
-   build.
+   This shows the render plan for the new build.
 
 #. Switch the instance:
 

@@ -45,6 +45,20 @@ Operator configuration
        default: {}                 # the webhook URL is kept in the secrets directory
        admins: {events: [drift, render_failed, job_failed, steam_auth]}
 
+   serve:                          # `dzo serve`, see the API page
+     installation: default         # name of this installation in the API
+     listen: 127.0.0.1:8080        # /api/v1
+     mod_listen: 127.0.0.1:2400    # where the dzo-admin mods connect
+     allow_insecure_http: false    # plain HTTP on a non-local address
+
+   web:                            # `dzo web`, see the web interface page
+     listen: 127.0.0.1:8081
+     user_header: X-Forwarded-User # set by your authenticating reverse proxy
+     assets: /usr/share/javascript # htmx and Leaflet (Debian packages)
+     docs_dir: /usr/share/doc/dzo/html
+     backends:                     # default: this host's own API
+       - {name: main, url: "http://127.0.0.1:8080", token_file: /var/lib/dzo/secrets/web.token}
+
    exporter:
      listen: ":9464"
      tls: {cert_file: null, key_file: null}
@@ -119,6 +133,11 @@ instance.yaml
      memory: null                  # e.g. 24G
    hooks:
      pre_start: ["hooks/traderstocks.sh"]
+   admin:                          # dzo-admin mod, see the admin map page
+     deny_classes: ["Land_*"]      # items admins may not spawn (trailing * = prefix)
+   admin_map:
+     watch:
+       - {layer: ufo_crash, classes: ["UFO_Crash_Site*"], icon: ufo}
 
 Main keys:
 
@@ -140,10 +159,17 @@ Main keys:
 
 ``mods``
    Workshop ids. ``server: true`` loads the mod with ``-servermod``. The list
-   order decides which mod wins when two mods change the same mission file. It
-   is not a game load order: DayZ orders addons by their declared dependencies.
-   dzo checks those dependencies before every start and refuses to start with a
-   missing one.
+   order is also the order of the ``-mod=`` and ``-servermod=`` arguments, and
+   decides which mod wins when two mods change the same mission file. dzo does
+   not sort mods or check their dependencies: list a mod after the mods it needs.
+
+``admin`` and ``admin_map``
+   Settings of the :doc:`dzo-admin mod <admin-map>`, which an instance runs when
+   ``{local: dzo-admin, server: true}`` is in ``mods``. ``admin`` has
+   ``disabled``, the update intervals ``sync_ms`` (default 1000),
+   ``players_s`` (5), ``vehicles_s`` (60), ``markers_s`` (10) and ``events_s``
+   (30), ``allow_spawn`` (default true), and ``allow_classes`` /
+   ``deny_classes`` for item spawns. ``admin_map.watch`` lists class watch rules.
 
 ``updates.policy``
    What happens when a mod update is found: ``auto`` restarts the server

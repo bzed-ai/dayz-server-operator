@@ -4,143 +4,107 @@
 Web interface
 =============
 
-``dzo serve`` (the ``dzo-web.service`` unit) adds a web interface and a JSON
-API on top of everything the command line does. Every action in the interface
-is an API call and is recorded in the audit log.
+``dzo web`` serves the web interface. It is a thin layer over the :doc:`API
+<api>`: every button is one API call, so what you can do in the browser you can
+also do with ``dzo player``, ``dzo vehicle`` or a script.
 
-It listens on localhost by default. Put it behind a reverse proxy with HTTPS,
-or give it its own certificate (reloaded without restarts, like the exporter).
-Plain HTTP on a non-local address is refused.
-
-This documentation is served by the web interface under ``/docs/``, without
-login.
-
-Signing in
-----------
-
-Every user signs in with a **password and a TOTP code** from an authenticator
-app (any app that supports standard 6-digit, 30-second codes).
-
-First administrator
-~~~~~~~~~~~~~~~~~~~
-
-There is no default password. Create the first administrator on the host:
+The web interface only ever talks to installations through their API. It can
+run on the same host as ``dzo serve`` (the default), or on another host, and
+one web interface can show **several dzo installations** side by side.
 
 .. code-block:: sh
 
-   sudo -iu dayz dzo user add alice --role admin
+   sudo -iu dayz dzo token create web --role operator --delegate > /var/lib/dzo/secrets/web.token
+   sudo -iu dayz dzo serve &      # the API (normally a systemd unit)
+   sudo -iu dayz dzo web          # http://127.0.0.1:8081
 
-This prints a one-time enrolment link (valid for 24 hours). Open it, then
+Several installations
+---------------------
 
-#. choose a password (at least 12 characters),
-#. scan the QR code with your authenticator app,
-#. confirm with a code,
-#. store the 10 recovery codes somewhere safe. They are shown only once.
+List one backend per installation in ``/etc/dzo/config.yaml``. Each needs an API
+token created *on that installation*:
 
-Further users are invited the same way from the user administration page.
+.. code-block:: yaml
 
-Sessions and security
-~~~~~~~~~~~~~~~~~~~~~
+   web:
+     backends:
+       - {name: eu, url: "https://dzo-eu.example.invalid", token_file: /var/lib/dzo/secrets/eu.token}
+       - {name: us, url: "https://dzo-us.example.invalid", token_file: /var/lib/dzo/secrets/us.token}
 
-* A session ends after 30 minutes without activity and after 12 hours at the
-  latest. You can see and end your sessions on your profile page.
-* Sensitive actions ask for a fresh TOTP code: user and role changes, global or
-  country bans, actions on all servers, wipes and restores, secret changes, and
-  API tokens.
-* After 10 failed attempts an account is locked for 15 minutes. Lockouts,
-  recovery-code use and MFA resets are reported to the admin Discord channel.
-* Lost your phone? Use a recovery code, or ask an administrator to run
-  ``dzo user reset-mfa <name>`` on the host.
+The dashboard shows every installation with its instances. An installation that
+is down is shown with its error; the others keep working.
 
-Single sign-on
-~~~~~~~~~~~~~~
+Access control
+--------------
 
-OIDC login is optional. dzo accepts the identity provider's MFA only if the
-login token says MFA was used; otherwise it asks for its own TOTP code as well.
-Roles can be mapped from a groups claim.
+.. warning::
 
-API tokens
-~~~~~~~~~~
+   The web interface has **no login of its own yet** (no users, passwords or
+   second factor). Anyone who can reach it acts with the role of the backend
+   token. Keep it on localhost, or put it behind a reverse proxy that
+   authenticates your users (with multi-factor login) and terminates HTTPS.
+   dzo refuses to listen on a non-local address unless
+   ``web.allow_insecure_http`` is set.
 
-Bots and scripts use API tokens instead of logins. A token has a name, a set of
-permissions and servers, and an expiry date. It is shown once, and can never
-manage users, roles or other tokens.
+Set ``web.user_header`` to the header your proxy fills with the signed-in user
+(for example ``X-Forwarded-User``). That name goes into the audit log next to
+each action. Only use this behind a proxy that strips the header from incoming
+requests.
+
+What the interface does about browser attacks: every change needs a per-session
+token that the pages hand to htmx (and a same-origin check), responses carry a
+strict content security policy without inline scripts, and pages cannot be
+framed.
 
 Roles
 -----
+
+The role of a token decides what the interface may do. Without a permission the
+action fails with a clear message.
 
 .. list-table::
    :header-rows: 1
 
    * - Role
-     - Typical use
+     - May
    * - ``viewer``
-     - see status, players and the map
+     - see instances, players, vehicles, events and public map markers
    * - ``moderator``
-     - kick, ban, message players
+     - also send direct messages to players
    * - ``operator``
-     - restarts, schedules, broadcasts, mods, configuration
+     - also broadcast, teleport, spawn items, repair and delete vehicles
    * - ``admin``
-     - everything, including users
+     - everything, including the audit log and markers that are admin-only
 
-Roles are granted globally or per server, for example "moderator on deerisle
-only". Individual permissions such as ``player.ban.global``,
-``player.spawn_item`` or ``pii.view`` (seeing IP addresses) refine them.
+Pages
+-----
 
-Players
--------
+Dashboard
+   All installations and their instances, with the dzo-admin connection state
+   and player and vehicle counts.
 
-Players are always identified by their Steam ID, never by name. For each player
-dzo keeps first and last login, playtime per server, name history, sessions and
-the country (from GeoIP). The player page also shows Steam profile information
-and VAC or game bans.
+Instance
+   Broadcast message, the player list (refreshed every 5 seconds) with a panel of
+   actions per player (message, teleport to coordinates or to another player,
+   give item with a search over the server's item classes), and the vehicle list
+   with repair and delete.
 
-IP addresses are personal data: only users with ``pii.view`` see them, they are
-kept for a limited time (then only the country remains), and
-``dzo player forget <steamid>`` erases a player's data (except active bans).
+Live map
+   Players, vehicles, active events and marker layers on a map that updates as
+   the server reports. Click the map to teleport a player there. See
+   :doc:`admin-map`.
 
-Moderation
-----------
+Audit log
+   Who did what, when, from where (web, CLI or API), and the result. Needs the
+   ``admin`` role.
 
-Kick
-   From the player list or page, with a reason.
+Documentation
+   This documentation is served under ``/docs/`` without login.
 
-Ban
-   By Steam ID, BattlEye GUID, IP address or range, country or network (ASN).
-   For one, several or all servers; permanent or temporary; with reason, public
-   message and notes. Country and network bans can have exceptions for
-   individual Steam IDs.
+Not available yet
+-----------------
 
-   Bans are checked when a player joins. Steam ID and GUID bans are also written
-   to the server's own ban lists, so they hold even while dzo is down.
-
-Whitelist mode
-   Only listed players may join. Useful for events and test servers.
-
-Watchlist and notes
-   Get notified when a watched player joins any server. Notes and evidence
-   links are visible to moderators.
-
-Restarts, broadcasts and schedules
-----------------------------------
-
-* "Restart now" with a countdown, or immediately.
-* One-off restarts ("today at 18:30 with a 15 minute countdown"), and "restart
-  when empty".
-* Pending restarts can be postponed or cancelled.
-* Broadcasts: send now to one, several or all servers, or on a schedule, with
-  placeholders such as ``{next_restart_in}`` and ``{players}``. Direct messages
-  to single players.
-
-Scheduled items become systemd timers, so they also run when the web interface
-is not running.
-
-Item spawning
--------------
-
-With the ``dzo-admin`` server mod (see :doc:`admin-map`) you can give items to
-players: search by class or display name, filter by category, choose quantity
-and condition, or use a saved kit. The list of items comes from the running
-server and the server's Central Economy files, so modded items appear
-automatically. Spawns are limited by permissions and an allow/deny list per
-server, and every spawn is logged.
+These are planned and are not part of the web interface today: users with
+passwords and TOTP, single sign-on, the player database (history, sessions,
+Steam profiles, GeoIP), kicks and bans, restart timers and scheduled
+broadcasts, a map background, and editors for server configuration.

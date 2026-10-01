@@ -39,6 +39,11 @@ func newRootCmd() *cobra.Command {
 		newProductCmd(),
 		newModCmd(),
 		newInstanceCmd(),
+		newServeCmd(),
+		newWebCmd(),
+		newTokenCmd(),
+		newPlayerCmd(),
+		newVehicleCmd(),
 	)
 	return root
 }

@@ -55,7 +55,7 @@ Before every start dzo builds the mission in a staging area:
 #. add each mod's integration files, in the order of the ``mods`` list;
 #. add overlays (shared ones first, then the instance's own);
 #. validate everything: XML and JSON must parse, every referenced file and
-   every CE folder must exist, mod dependencies must be met;
+   every CE folder must exist;
 #. only if everything is valid: take a snapshot if one is due, write the changes
    into the live mission atomically, update the manifest.
 

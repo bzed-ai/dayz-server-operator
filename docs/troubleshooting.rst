@@ -14,7 +14,7 @@ A server does not start: "render failed"
 mission is unchanged.
 
 #. Show the problem: ``dzo instance render <name> --dry-run``. It names the file and the
-   error (invalid XML, a missing referenced file, a missing mod dependency).
+   error (invalid XML, a missing referenced file).
 #. Fix it in the site repository, commit, then ``dzo site pull``.
 #. ``dzo start <name>``.
 

@@ -102,11 +102,30 @@ type Instance struct {
 	Notify       site.NotifyConfig    `yaml:"notify"`
 	Container    site.ContainerConfig `yaml:"container"`
 	Hooks        site.HooksConfig     `yaml:"hooks"`
+	Admin        site.AdminConfig     `yaml:"admin,omitempty"`
+	AdminMap     site.AdminMap        `yaml:"admin_map,omitempty"`
 
 	// Missing lists what is not downloaded yet; Quadlet is only populated
 	// when it is empty.
 	Missing []string              `yaml:"missing,omitempty"`
 	Quadlet quadlet.ContainerSpec `yaml:"-"`
+}
+
+// AdminName is the local servermod that enables the admin integration.
+const AdminName = "dzo-admin"
+
+// AdminEnabled reports whether the instance runs the dzo-admin mod and has
+// not switched the integration off.
+func (i *Instance) AdminEnabled() bool {
+	if i.Admin.Disabled {
+		return false
+	}
+	for _, m := range i.Mods {
+		if m.Local == AdminName {
+			return true
+		}
+	}
+	return false
 }
 
 // Resolve builds the named instance. Errors are config errors (unknown
@@ -136,7 +155,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 	inst := &Instance{
 		Name: name, Map: raw.Map, Ports: raw.Ports, Network: raw.Network, Image: t.Site.Image,
 		Params: raw.Params, Overlays: raw.Overlays, Updates: raw.Updates, Restarts: raw.Restarts,
-		Health: raw.Health, RestartLimit: raw.RestartLimit, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks,
+		Health: raw.Health, RestartLimit: raw.RestartLimit, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Admin: raw.Admin, AdminMap: raw.AdminMap,
 		Mission: Mission{Source: src, Fallback: raw.FallbackMission, Unmanaged: raw.Mission.Unmanaged, Drift: raw.Mission.Drift},
 		Product: Product{Name: raw.Product, Product: prod},
 		Paths: Paths{

@@ -1,0 +1,32 @@
+/* SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de> */
+/* SPDX-License-Identifier: AGPL-3.0-or-later */
+:root {
+  --bg: #fafafa; --fg: #1c1c1c; --muted: #666; --line: #d8d8d8; --accent: #2a6f4f;
+  --ok-bg: #e3f3e8; --err-bg: #fbe4e4; --head: #ececec;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #17191b; --fg: #e6e6e6; --muted: #9a9a9a; --line: #34383c; --accent: #5cc48f; --ok-bg: #1d3a2b; --err-bg: #44201f; --head: #22262a; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.45 system-ui, sans-serif; }
+header { display: flex; gap: 1rem; align-items: center; padding: .6rem 1rem; background: var(--head); border-bottom: 1px solid var(--line); }
+header nav { display: flex; gap: 1rem; flex: 1; }
+.brand { font-weight: 700; color: var(--accent); text-decoration: none; font-size: 1.2rem; }
+.ver { color: var(--muted); font-size: .85rem; }
+a { color: var(--accent); }
+main { padding: 0 1rem 2rem; max-width: 1200px; margin: 0 auto; }
+h1 small, h2 small, h3 small { color: var(--muted); font-weight: 400; font-size: .7em; }
+table { border-collapse: collapse; width: 100%; margin: .5rem 0; }
+th, td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid var(--line); }
+th { background: var(--head); }
+tr.err td { color: #b33; }
+input, select, button { font: inherit; padding: .3rem .5rem; margin: .15rem .1rem; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--fg); }
+button { cursor: pointer; background: var(--accent); color: #fff; border-color: var(--accent); }
+.flash { padding: .4rem .7rem; border-radius: 4px; margin: .4rem 0; }
+.flash.ok { background: var(--ok-bg); }
+.flash.err { background: var(--err-bg); }
+.panel { border: 1px solid var(--line); border-radius: 6px; padding: .5rem 1rem; margin-top: .8rem; }
+.dot { display: inline-block; width: .65rem; height: .65rem; border-radius: 50%; background: #999; }
+.dot.on { background: #2db36b; }
+#map { height: 75vh; min-height: 420px; border: 1px solid var(--line); background: #cfd8c8; }
+@media (max-width: 700px) { header { flex-wrap: wrap; } table { font-size: .85rem; } }

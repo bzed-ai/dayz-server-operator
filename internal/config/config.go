@@ -10,6 +10,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -74,11 +75,51 @@ type Notify struct {
 	Discord []DiscordWebhook `yaml:"discord"`
 }
 
+// Serve configures `dzo serve`: the JSON API of this installation and the
+// endpoint the dzo-admin mods call (§C12, §C16).
+type Serve struct {
+	// Installation names this installation in the API, so one web interface
+	// can tell several apart.
+	Installation string `yaml:"installation"`
+	Listen       string `yaml:"listen"`     // /api/v1
+	ModListen    string `yaml:"mod_listen"` // /mod/v1/sync, for the game servers
+	// AllowInsecureHTTP permits plain HTTP on a non-loopback address.
+	AllowInsecureHTTP bool `yaml:"allow_insecure_http"`
+}
+
+// Backend is one installation the web interface talks to.
+type Backend struct {
+	Name string `yaml:"name"`
+	URL  string `yaml:"url"`
+	// TokenFile holds an API token of that installation (role operator,
+	// created with `dzo token create --delegate`).
+	TokenFile string `yaml:"token_file"`
+}
+
+// Web configures `dzo web`, the web interface. It reaches installations only
+// through their API, so it can run on another host and serve several.
+type Web struct {
+	Listen            string `yaml:"listen"`
+	AllowInsecureHTTP bool   `yaml:"allow_insecure_http"`
+	// Assets is the directory with htmx and Leaflet (Debian's libjs-*).
+	Assets string `yaml:"assets"`
+	// DocsDir is the built documentation, served under /docs/.
+	DocsDir string `yaml:"docs_dir"`
+	// UserHeader names the request header an authenticating reverse proxy
+	// sets to the signed-in user (e.g. X-Forwarded-User). The web interface
+	// has no login of its own yet: it reports this user to the audit log, and
+	// must only be reachable through such a proxy or on localhost.
+	UserHeader string    `yaml:"user_header"`
+	Backends   []Backend `yaml:"backends"`
+}
+
 // Config is the root of /etc/dzo/config.yaml.
 type Config struct {
 	Paths    Paths              `yaml:"paths"`
 	Site     Site               `yaml:"site"`
 	Steam    Steam              `yaml:"steam"`
+	Serve    Serve              `yaml:"serve"`
+	Web      Web                `yaml:"web"`
 	Products map[string]Product `yaml:"products"`
 	Notify   Notify             `yaml:"notify"`
 }
@@ -100,6 +141,8 @@ func defaultsTemplated() *Config {
 			DB:        "${data}/db",
 			Site:      "${data}/site",
 		},
+		Serve: Serve{Installation: "default", Listen: "127.0.0.1:8080", ModListen: "127.0.0.1:2400"},
+		Web:   Web{Listen: "127.0.0.1:8081", Assets: "/usr/share/javascript", DocsDir: "/usr/share/doc/dzo/html"},
 		Products: map[string]Product{
 			"dayz-stable": {
 				AppID:         223350,
@@ -213,6 +256,28 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	for _, l := range []struct {
+		name, addr string
+		insecure   bool
+	}{
+		{"serve.listen", c.Serve.Listen, c.Serve.AllowInsecureHTTP},
+		{"serve.mod_listen", c.Serve.ModListen, c.Serve.AllowInsecureHTTP},
+		{"web.listen", c.Web.Listen, c.Web.AllowInsecureHTTP},
+	} {
+		if err := CheckListen(l.addr, l.insecure); err != nil {
+			errs = append(errs, fmt.Sprintf("%s: %v", l.name, err))
+		}
+	}
+	names := map[string]bool{}
+	for _, b := range c.Web.Backends {
+		if b.Name == "" || b.URL == "" || b.TokenFile == "" {
+			errs = append(errs, "web.backends: every entry needs name, url and token_file")
+		} else if names[b.Name] {
+			errs = append(errs, fmt.Sprintf("web.backends: duplicate name %q", b.Name))
+		}
+		names[b.Name] = true
+	}
+
 	seen := map[string]bool{}
 	for _, w := range c.Notify.Discord {
 		if w.Name == "" {
@@ -230,6 +295,26 @@ func (c *Config) Validate() error {
 
 	if len(errs) > 0 {
 		return fmt.Errorf("config: invalid configuration:\n  - %s", strings.Join(errs, "\n  - "))
+	}
+	return nil
+}
+
+// CheckListen validates a listen address: host:port, and plain HTTP only on
+// a loopback address unless insecure is set (§C12: the web interface and the
+// mod endpoint sit behind a reverse proxy or on localhost).
+func CheckListen(addr string, insecure bool) error {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil || port == "" {
+		return fmt.Errorf("%q is not host:port", addr)
+	}
+	if insecure {
+		return nil
+	}
+	if host == "localhost" {
+		return nil
+	}
+	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+		return fmt.Errorf("%q is not a loopback address; put dzo behind a reverse proxy with HTTPS or set allow_insecure_http", addr)
 	}
 	return nil
 }
