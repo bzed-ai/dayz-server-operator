@@ -113,6 +113,18 @@ type Web struct {
 	Backends   []Backend `yaml:"backends"`
 }
 
+// MapTiles says where each map's tile source comes from. A map is named like
+// the world of its mission (chernarusplus, enoch, sakhal, deerisle).
+type MapTiles struct {
+	Maps map[string]MapSource `yaml:"maps"`
+}
+
+// MapSource is the data PBO of a map: the DayZ client's worlds_<map>_data.pbo,
+// or a modded map's data.pbo. The dedicated server's copy is not enough.
+type MapSource struct {
+	Source string `yaml:"source"`
+}
+
 // Config is the root of /etc/dzo/config.yaml.
 type Config struct {
 	Paths    Paths              `yaml:"paths"`
@@ -120,6 +132,7 @@ type Config struct {
 	Steam    Steam              `yaml:"steam"`
 	Serve    Serve              `yaml:"serve"`
 	Web      Web                `yaml:"web"`
+	MapTiles MapTiles           `yaml:"map_tiles"`
 	Products map[string]Product `yaml:"products"`
 	Notify   Notify             `yaml:"notify"`
 }

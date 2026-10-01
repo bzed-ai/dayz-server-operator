@@ -35,6 +35,9 @@ func APITokens(cfg *config.Config) string { return filepath.Join(cfg.Paths.Secre
 // AuditLog is the audit log file.
 func AuditLog(cfg *config.Config) string { return filepath.Join(cfg.Paths.DB, "audit.jsonl") }
 
+// TilesDir is where the built map tile sets live.
+func TilesDir(cfg *config.Config) string { return filepath.Join(cfg.Paths.Cache, "maptiles") }
+
 // ModEndpoint is the URL an instance's mod posts to (with a trailing slash,
 // as RestApi wants it).
 func ModEndpoint(cfg *config.Config, inst *resolve.Instance) (string, error) {
@@ -119,6 +122,7 @@ func Run(ctx context.Context, cfg *config.Config, o Options) error {
 		return err
 	}
 	apiSrv := api.New(cfg.Serve.Installation, o.Version, reg, api.NewTokenStore(APITokens(cfg)), admin.NewAudit(AuditLog(cfg)))
+	apiSrv.TilesDir = TilesDir(cfg)
 	// The API serves with write timeouts off: the stream stays open.
 	apiHTTP, modHTTP := newServer(apiSrv.Handler()), newServer(reg.ModHandler())
 	modHTTP.WriteTimeout = time.Minute

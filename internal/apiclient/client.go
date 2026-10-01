@@ -253,3 +253,17 @@ func (c *Client) Stream(ctx context.Context, name string, fn func(kind string, d
 	}
 	return sc.Err()
 }
+
+// Tile fetches a map tile or a tile set's metadata.json (rest is
+// "metadata.json" or "<hash>/<z>/<x>/<y>.jpg"). The caller closes the body of
+// the response, whatever its status.
+func (c *Client) Tile(ctx context.Context, name, rest string) (*http.Response, error) {
+	if !api.ValidTilePath(name, rest) {
+		return nil, fmt.Errorf("apiclient: bad tile path")
+	}
+	r, err := c.req(ctx, http.MethodGet, "/api/v1/tiles/"+name+"/"+rest, nil)
+	if err != nil {
+		return nil, err
+	}
+	return c.HTTP.Do(r)
+}

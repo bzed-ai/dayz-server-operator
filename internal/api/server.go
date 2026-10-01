@@ -37,6 +37,8 @@ type Server struct {
 	Hubs   *admin.Registry
 	Tokens *TokenStore
 	Audit  *admin.Audit
+	// TilesDir holds the map tile sets (see internal/maptiles); empty serves none.
+	TilesDir string
 
 	actions *admin.Limiter
 	targets *admin.Limiter
@@ -110,6 +112,7 @@ func (s *Server) Handler() http.Handler {
 	route("GET "+base, PermView, false, s.info)
 	route("GET "+base+"/instances", PermView, false, s.instances)
 	route("GET "+base+"/audit", PermAuditView, false, s.audit)
+	route("GET "+base+"/tiles/{map}/{rest...}", PermView, false, s.tile)
 	route("GET "+base+"/instances/{instance}", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Status()) })
 	route("GET "+base+"/instances/{instance}/players", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Players()) })
 	route("GET "+base+"/instances/{instance}/vehicles", PermView, true, func(w http.ResponseWriter, _ *http.Request, c *call) { writeJSON(w, 200, c.hub.Vehicles()) })
