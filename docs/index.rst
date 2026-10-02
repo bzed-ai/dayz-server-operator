@@ -31,6 +31,7 @@ Where to start
 
    overview
    installation
+   dev-host
    quickstart
    migration
 

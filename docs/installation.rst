@@ -48,6 +48,9 @@ The package
 
 It does **not** start any game server.
 
+On a development or test host without the package, see :doc:`dev-host` for the
+user, the btrfs mount and the other steps by hand.
+
 Choose the data locations
 -------------------------
 
