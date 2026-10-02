@@ -200,7 +200,7 @@ func prepareRunfiles(cfg *config.Config, inst *resolve.Instance) (runfiles.Input
 		return runfiles.Input{}, err
 	}
 	return runfiles.Input{
-		RuntimeDir: inst.Paths.Runtime, ProfilesDir: inst.Paths.Profiles, ServerCfg: src, Template: inst.Map,
+		RuntimeDir: inst.Paths.Runtime, ProfilesDir: inst.Paths.Profiles, StorageDir: inst.Paths.Storage, ServerCfg: src, Template: inst.Map,
 		QueryPort: inst.Ports.Query, RConPort: inst.Ports.RCon, RConPass: pw, Keys: keys,
 	}, nil
 }

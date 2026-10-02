@@ -4,9 +4,17 @@
 Missions, integrations and overlays
 ===================================
 
-The mission folder holds the Central Economy files, ``init.c``, and the game
-world (``storage_1``). dzo treats it with care: **the live mission is never
-wiped or recreated**.
+The mission folder holds the Central Economy files and ``init.c``. dzo treats it
+with care: **the live mission is never wiped or recreated**.
+
+The game world (the persistence, ``storage_1``) is not in the mission folder.
+dzo starts the server with ``-storage=/storage``, and ``/storage`` is
+``<instances>/<name>/storage/<map>`` on the host. The server then writes
+``storage_<instanceId>`` there and nothing into the mission, so the mission folder
+only holds files dzo and the mods manage. Keeping the world per map means that
+changing the map starts a fresh world instead of loading the old map's
+persistence; the old one stays in its directory. Mods that use the ``$storage:``
+placeholder get the same directory.
 
 Pristine and live
 -----------------
@@ -176,3 +184,25 @@ Mission history and reset
 * ``dzo mission reinit <name>`` recreates the live mission from pristine. This is
   the only destructive mission command: it asks for confirmation and always
   takes a snapshot first.
+
+Moving an existing world
+------------------------
+
+An instance that ran before dzo used ``-storage`` has its world in
+``mpmissions/<map>/storage_1``. The server does not look there any more and would
+start with an empty world. Move it while the instance is stopped (a restart
+alone would not be enough: the unit of a running server keeps its old mounts
+until the restart):
+
+.. code-block:: sh
+
+   systemctl --user stop dzo-<name>
+   mkdir -p <instances>/<name>/storage/<map>
+   mv <instances>/<name>/mpmissions/<map>/storage_* <instances>/<name>/storage/<map>/
+   dzo units sync --deploy <name>
+   systemctl --user start dzo-<name>
+
+The directory is on the same subvolume as the mission, so the move is a rename,
+and the backups of the instance include it as before. Do not point a 1.29 and a
+1.30 server at the same world: 1.30 writes a newer persistence format that 1.29
+cannot load.

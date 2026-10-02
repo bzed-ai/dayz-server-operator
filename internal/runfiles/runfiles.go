@@ -102,6 +102,7 @@ func RConPassword(secretsDir, name string) (string, error) {
 type Input struct {
 	RuntimeDir  string // the instance's runtime/
 	ProfilesDir string // the instance's profiles/
+	StorageDir  string // the instance's storage/<map>, created if missing; empty skips it
 	ServerCfg   []byte // the site's serverDZ.cfg
 	Template    string
 	QueryPort   int
@@ -137,6 +138,11 @@ func Write(in Input) error {
 	}
 	if err := os.WriteFile(filepath.Join(in.RuntimeDir, "serverDZ.cfg"), cfg.Bytes(), 0o600); err != nil {
 		return err
+	}
+	if in.StorageDir != "" {
+		if err := os.MkdirAll(in.StorageDir, 0o750); err != nil {
+			return err
+		}
 	}
 	be := filepath.Join(in.ProfilesDir, "battleye")
 	if err := os.MkdirAll(be, 0o750); err != nil {

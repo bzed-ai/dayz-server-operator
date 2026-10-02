@@ -19,6 +19,7 @@ paths:
     manifest: /DATA/instances/beta/mpmissions/.dzo-manifest.json
     filehistory: /DATA/instances/beta/filehistory
     profiles: /DATA/instances/beta/profiles
+    storage: /DATA/instances/beta/storage/empty.beta
     runtime: /DATA/instances/beta/runtime
 ports:
     game: 2402
@@ -84,12 +85,13 @@ Volume=/DATA/cache/products/dayz-experimental/200:/dayz:ro
 Volume=/DATA/instances/beta/runtime/keys:/dayz/keys:ro
 Volume=/DATA/instances/beta/mpmissions:/dayz/mpmissions
 Volume=/DATA/instances/beta/profiles:/profiles
+Volume=/DATA/instances/beta/storage/empty.beta:/storage
 Volume=/DATA/instances/beta/runtime/serverDZ.cfg:/profiles/serverDZ.cfg:ro
 Volume=/DATA/cache/local/dzo-admin/abcd:/dayz/@dzo-admin:ro
 Volume=/var/lib/GeoIP:/var/lib/GeoIP:ro
 Environment=LANG=C
 WorkingDir=/dayz
-Exec=./DayZServer -config=/profiles/serverDZ.cfg -port=2402 -profiles=/profiles -BEpath=/profiles/battleye -servermod=@dzo-admin
+Exec=./DayZServer -config=/profiles/serverDZ.cfg -port=2402 -profiles=/profiles -storage=/storage -BEpath=/profiles/battleye -servermod=@dzo-admin
 HealthCmd=/usr/local/bin/dzo health live --query 127.0.0.1:27116
 HealthInterval=1m
 HealthRetries=5

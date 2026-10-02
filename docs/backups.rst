@@ -115,11 +115,13 @@ The instance is stopped, a safety snapshot is taken, the current data is moved
 aside (and kept as a snapshot), the backup becomes the live instance, and the
 server starts.
 
-Restore only part of an instance, for example the world or one mod's data:
+Restore only part of an instance, for example the world or one mod's data (the
+world is below ``storage/<map>``; snapshots taken before dzo moved it there have it
+in ``mpmissions/<map>/storage_1``):
 
 .. code-block:: sh
 
-   dzo restore deerisle <id> --path mpmissions/empty.deerisle/storage_1
+   dzo restore deerisle <id> --path storage/empty.deerisle/storage_1
 
 A restore takes a ``pre_restore`` snapshot first, so restoring the wrong snapshot
 can be undone, and the data it replaces is kept as a snapshot of reason

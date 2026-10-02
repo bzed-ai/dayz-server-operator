@@ -22,6 +22,7 @@ paths:
     manifest: /DATA/instances/alpha/mpmissions/.dzo-manifest.json
     filehistory: /DATA/instances/alpha/filehistory
     profiles: /DATA/instances/alpha/profiles
+    storage: /DATA/instances/alpha/storage/dayzOffline.chernarusplus
     runtime: /DATA/instances/alpha/runtime
 ports:
     game: 2302
@@ -91,12 +92,13 @@ Volume=/DATA/cache/products/dayz-stable/100:/dayz:ro
 Volume=/DATA/instances/alpha/runtime/keys:/dayz/keys:ro
 Volume=/DATA/instances/alpha/mpmissions:/dayz/mpmissions
 Volume=/DATA/instances/alpha/profiles:/profiles
+Volume=/DATA/instances/alpha/storage/dayzOffline.chernarusplus:/storage
 Volume=/DATA/instances/alpha/runtime/serverDZ.cfg:/profiles/serverDZ.cfg:ro
 Volume=/DATA/cache/workshop/221100/1559212036/111:/dayz/@1559212036:ro
 Volume=/DATA/cache/workshop/221100/1828439124/222:/dayz/@1828439124:ro
 Environment=LANG=C
 WorkingDir=/dayz
-Exec=./DayZServer -config=/profiles/serverDZ.cfg -port=2302 -profiles=/profiles -BEpath=/profiles/battleye -mod=@1559212036 -servermod=@1828439124 -cpuCount=4 -limitFPS=60 -netlog
+Exec=./DayZServer -config=/profiles/serverDZ.cfg -port=2302 -profiles=/profiles -storage=/storage -BEpath=/profiles/battleye -mod=@1559212036 -servermod=@1828439124 -cpuCount=4 -limitFPS=60 -netlog
 HealthCmd=/usr/local/bin/dzo health live --query 127.0.0.1:27016
 HealthInterval=1m
 HealthRetries=5

@@ -73,6 +73,7 @@ type Paths struct {
 	Manifest    string `yaml:"manifest"`
 	FileHistory string `yaml:"filehistory"`
 	Profiles    string `yaml:"profiles"`
+	Storage     string `yaml:"storage"` // storage/<map>, the server's persistence (-storage)
 	Runtime     string `yaml:"runtime"`
 }
 
@@ -168,6 +169,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 			Manifest:    filepath.Join(root, "mpmissions", ".dzo-manifest.json"),
 			FileHistory: filepath.Join(root, "filehistory"),
 			Profiles:    filepath.Join(root, "profiles"),
+			Storage:     filepath.Join(root, "storage", raw.Map),
 			Runtime:     filepath.Join(root, "runtime"),
 		},
 	}
@@ -355,6 +357,7 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		{Source: filepath.Join(rt, "keys"), Destination: "/dayz/keys", ReadOnly: true},
 		{Source: filepath.Dir(inst.Paths.Manifest), Destination: "/dayz/mpmissions"},
 		{Source: inst.Paths.Profiles, Destination: "/profiles"},
+		{Source: inst.Paths.Storage, Destination: "/storage"},
 		{Source: filepath.Join(rt, "serverDZ.cfg"), Destination: "/profiles/serverDZ.cfg", ReadOnly: true},
 	}
 	var clientMods, serverMods []string
@@ -378,6 +381,7 @@ func buildQuadlet(inst *Instance) quadlet.ContainerSpec {
 		"-config=/profiles/serverDZ.cfg",
 		"-port=" + strconv.Itoa(inst.Ports.Game),
 		"-profiles=/profiles",
+		"-storage=/storage",
 		"-BEpath=/profiles/battleye",
 	}
 	if len(clientMods) > 0 {
