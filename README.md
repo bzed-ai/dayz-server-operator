@@ -77,6 +77,7 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 | `internal/web` | The web interface (`dzo web`): server-rendered pages, htmx, a Leaflet map; talks to installations only through their API |
 | `internal/servermods` | `make servermods`: packs `servermods/*/src/*` into reproducible PBOs with a prefix header, using [WoozyMasta/pbo](https://github.com/WoozyMasta/pbo) (MIT), and writes `compat.yaml` (dzo version, servermod commits, PBO hashes), which `dzo mod add\|update` checks shipped servermods against |
 | `internal/boottest` | `dzo test boot`: boots a real DayZServer from a disposable tree on a render of an instance and checks the logs (development machines only); `internal/runfiles` renders the keys, `serverDZ.cfg` and BattlEye config an instance needs besides its mission |
+| `internal/btrfs`, `internal/backup` | btrfs subvolumes and snapshots by ioctl as the unprivileged user; `dzo backup create\|list\|prune\|pin\|unpin\|diff` and `dzo restore`: an index of read-only snapshots, a retention policy (pure, property-tested), pre_restore safety snapshots, full and partial restore |
 | `internal/setup` | `dzo setup`: data directories and their checks, the two container images (`images/`), the Steam login hand-off, the site clone and the weekly image refresh timer |
 | `servermods/dzo-admin` | The Enforce Script servermod (submodule): state push, admin actions, marker API. Booted headless on 1.29 |
 | `internal/instance` | Ties the above into one instance's lifecycle: the F3 failed-render gate, quadlet+timer materialization, systemd start/stop/restart, and the BattlEye lock/kick graceful-restart sequence |
@@ -250,6 +251,15 @@ relying on them, roughly in the order they'd bite:
   `cfggameplay.json` (the server only reads it with `enableCfgGameplayFile = 1`).
   The Steam query answers long before the mission has loaded, so readiness waits
   for the mission and the mod's first contact.
+- **Backups** (`internal/btrfs`, `internal/backup`): the unprivileged snapshot,
+  read-only, writable-restore and delete operations were run on kernel 7.x (a
+  development machine) and on Debian 13's kernel 6.12 (a VM), with and without
+  `user_subvol_rm_allowed`. Destroying a read-only snapshot with that option
+  fails with EROFS until the flag is cleared; dzo does. The snapshot index is a
+  JSON file per instance, not the database the plan calls for, because there is no
+  database layer yet. Not built: the periodic and daily timers, snapshots before
+  server and mod updates, the database backup, metrics, the web page. The tests
+  skip without a btrfs filesystem (`DZO_BTRFS_TESTDIR`); CI mounts a loopback one.
 - **Container images and `dzo setup`** (`images/`, `internal/setup`): both
   images were built with podman 5.8 on a development machine. Every shared
   library of the real 1.29 `DayZServer` resolves inside `dzo-runtime` (`ldd`),

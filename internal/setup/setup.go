@@ -20,6 +20,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/bzed-ai/dayz-server-operator/internal/btrfs"
 	"github.com/bzed-ai/dayz-server-operator/internal/config"
 	"github.com/bzed-ai/dayz-server-operator/internal/instance"
 	"github.com/bzed-ai/dayz-server-operator/internal/site"
@@ -37,7 +38,6 @@ var Images = []struct{ Dir, Tag string }{
 }
 
 const (
-	btrfsMagic   = 0x9123683E
 	minFreeGiB   = 10
 	refreshTimer = "dzo-image-refresh"
 )
@@ -177,8 +177,10 @@ func (r *runner) filesystems() {
 		r.say("error", "paths.snapshots (%s) is not on the same filesystem as paths.instances (%s): a snapshot cannot cross filesystems", p.Snapshots, p.Instances)
 	}
 	var st syscall.Statfs_t
-	if err := syscall.Statfs(inst, &st); err == nil && st.Type != btrfsMagic {
+	if on, err := btrfs.IsBtrfs(inst); err == nil && !on {
 		r.say("warn", "paths.instances %s is not on btrfs; the btrfs snapshot backups (docs: Backups) need it", p.Instances)
+	} else if err == nil && !btrfs.UserSubvolRmAllowed(snap) {
+		r.say("info", "paths.snapshots %s is mounted without user_subvol_rm_allowed: deleting old snapshots works but takes time proportional to their size; the mount option makes it instant", p.Snapshots)
 	}
 	if err := syscall.Statfs(existing(p.Data), &st); err == nil {
 		if free := st.Bavail * uint64(st.Bsize) >> 30; free < minFreeGiB { //nolint:gosec // block size is positive

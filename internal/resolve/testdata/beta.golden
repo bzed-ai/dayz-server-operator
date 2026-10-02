@@ -59,6 +59,14 @@ container:
         - /var/lib/GeoIP:/var/lib/GeoIP:ro
     memory: 24G
 hooks: {}
+backup:
+    before:
+        - update
+        - mod_update
+        - mission_update
+        - config_change
+    keep: 20
+    min_keep: 3
 ---
 [Unit]
 Description=DayZ server beta (dzo)

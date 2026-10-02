@@ -38,6 +38,8 @@ const (
 	defaultHealthInterval = 60 * time.Second
 	defaultHealthRetries  = 5
 	defaultRestartBurst   = 5
+	defaultBackupKeep     = 20
+	defaultBackupMinKeep  = 3
 	defaultRestartWindow  = 30 * time.Minute
 	stopTimeout           = 120 * time.Second
 	restartSec            = 15 * time.Second
@@ -102,6 +104,7 @@ type Instance struct {
 	Notify       site.NotifyConfig    `yaml:"notify"`
 	Container    site.ContainerConfig `yaml:"container"`
 	Hooks        site.HooksConfig     `yaml:"hooks"`
+	Backup       site.BackupConfig    `yaml:"backup"`
 	Admin        site.AdminConfig     `yaml:"admin,omitempty"`
 	AdminMap     site.AdminMap        `yaml:"admin_map,omitempty"`
 
@@ -138,7 +141,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 	}
 	// Site defaults fill every field the instance leaves unset.
 	def := reflect.ValueOf(t.Site.Defaults)
-	for _, f := range []string{"Params", "Updates", "Restarts", "Health", "RestartLimit", "Notify", "Container"} {
+	for _, f := range []string{"Params", "Updates", "Restarts", "Health", "RestartLimit", "Notify", "Container", "Backup"} {
 		fillZero(reflect.ValueOf(&raw).Elem().FieldByName(f), def.FieldByName(f))
 	}
 
@@ -155,7 +158,7 @@ func Resolve(cfg *config.Config, t *site.Tree, name string) (*Instance, error) {
 	inst := &Instance{
 		Name: name, Map: raw.Map, Ports: raw.Ports, Network: raw.Network, Image: t.Site.Image,
 		Params: raw.Params, Overlays: raw.Overlays, Updates: raw.Updates, Restarts: raw.Restarts,
-		Health: raw.Health, RestartLimit: raw.RestartLimit, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Admin: raw.Admin, AdminMap: raw.AdminMap,
+		Health: raw.Health, RestartLimit: raw.RestartLimit, Notify: raw.Notify, Container: raw.Container, Hooks: raw.Hooks, Backup: raw.Backup, Admin: raw.Admin, AdminMap: raw.AdminMap,
 		Mission: Mission{Source: src, Fallback: raw.FallbackMission, Unmanaged: raw.Mission.Unmanaged, Drift: raw.Mission.Drift},
 		Product: Product{Name: raw.Product, Product: prod},
 		Paths: Paths{
@@ -263,6 +266,15 @@ func missionSource(t *site.Tree, raw site.Instance) (site.MissionSource, error) 
 func applyDefaults(inst *Instance) {
 	if inst.Image == "" {
 		inst.Image = defaultImage
+	}
+	if inst.Backup.Before == nil {
+		inst.Backup.Before = []string{"update", "mod_update", "mission_update", "config_change"}
+	}
+	if inst.Backup.Keep == 0 {
+		inst.Backup.Keep = defaultBackupKeep
+	}
+	if inst.Backup.MinKeep == 0 {
+		inst.Backup.MinKeep = defaultBackupMinKeep
 	}
 	if inst.Mission.Drift == "" {
 		inst.Mission.Drift = site.DriftWarnBackupOverwrite

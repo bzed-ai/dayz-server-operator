@@ -13,6 +13,7 @@ require (
 	github.com/woozymasta/pbo v0.3.0
 	github.com/woozymasta/rap v0.1.6
 	github.com/woozymasta/rvmat v0.4.0
+	golang.org/x/sys v0.47.0
 	golang.org/x/term v0.35.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -26,5 +27,4 @@ require (
 	github.com/woozymasta/lzss v0.2.0 // indirect
 	github.com/woozymasta/pathrules v0.1.3 // indirect
 	github.com/woozymasta/rvcfg v0.3.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 )

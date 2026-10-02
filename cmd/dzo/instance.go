@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/bzed-ai/dayz-server-operator/internal/backup"
 	"github.com/bzed-ai/dayz-server-operator/internal/battleye"
 	"github.com/bzed-ai/dayz-server-operator/internal/config"
 	"github.com/bzed-ai/dayz-server-operator/internal/instance"
@@ -89,6 +90,11 @@ func newInstanceRenderCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if !dryRun {
+				if err := prepareInstanceDir(cmd, cfg, inst, updatePristine); err != nil {
+					return err
+				}
+			}
 			src := inst.Mission.Source
 			if _, err := os.Stat(inst.Paths.Pristine); updatePristine || os.IsNotExist(err) {
 				if err := mission.FetchPristine(cmd.Context(), src.Git, src.Ref, src.Path, inst.Paths.Pristine); err != nil {
@@ -128,6 +134,44 @@ func newInstanceRenderCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the apply plan and write nothing to the live mission")
 	cmd.Flags().BoolVar(&updatePristine, "update-pristine", false, "fetch the pristine mission again from git before rendering")
 	return cmd
+}
+
+// prepareInstanceDir creates the instance as a btrfs subvolume on its first
+// render, and takes the snapshots the instance's backup policy asks for before
+// this render changes anything. A snapshot that fails aborts the render.
+func prepareInstanceDir(cmd *cobra.Command, cfg *config.Config, inst *resolve.Instance, updatePristine bool) error {
+	_, statErr := os.Lstat(inst.Paths.Root)
+	firstRender := os.IsNotExist(statErr)
+	subvol, err := backup.EnsureInstanceDir(inst.Paths.Root)
+	if err != nil {
+		return err
+	}
+	if !subvol {
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s is not a btrfs subvolume, so this instance cannot be backed up\n", inst.Paths.Root)
+		return nil
+	}
+	if err := os.MkdirAll(cfg.Paths.Snapshots, 0o750); err != nil {
+		return err
+	}
+	if firstRender {
+		return nil // nothing to protect yet
+	}
+	m := backup.For(cfg, inst)
+	reasons := []backup.Reason{backup.Render}
+	if updatePristine {
+		reasons = append(reasons, backup.MissionUpdate)
+	}
+	for _, r := range reasons {
+		res, took, err := backup.Before(cmd.Context(), m, inst.Backup, r)
+		if err != nil {
+			return fmt.Errorf("the %s snapshot failed, nothing was changed: %w", r, err)
+		}
+		if took {
+			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "snapshot %s\n", res.Snapshot.ID)
+		}
+		printWarnings(cmd.ErrOrStderr(), res.Warnings)
+	}
+	return nil
 }
 
 // prepareRunfiles gathers what the keys, serverDZ.cfg and BattlEye config of

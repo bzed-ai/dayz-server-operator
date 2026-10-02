@@ -48,6 +48,8 @@ func newRootCmd() *cobra.Command {
 		newMapCmd(),
 		newSetupCmd(),
 		newTestCmd(),
+		newBackupCmd(),
+		newRestoreCmd(),
 	)
 	return root
 }

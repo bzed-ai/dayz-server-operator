@@ -40,7 +40,12 @@ func commitAll(t *testing.T, dir string) {
 // fallback mission. It returns the config path and the instance root.
 func renderSetup(t *testing.T) (cfg, instRoot, missionRepo string) {
 	t.Helper()
-	data := t.TempDir()
+	return renderSetupIn(t, t.TempDir())
+}
+
+// renderSetupIn is renderSetup with the data directory chosen by the caller.
+func renderSetupIn(t *testing.T, data string) (cfg, instRoot, missionRepo string) {
+	t.Helper()
 	missionRepo = filepath.Join(t.TempDir(), "mission")
 	writeFile(t, filepath.Join(missionRepo, "empty.m", "init.c"), "init")
 	writeFile(t, filepath.Join(missionRepo, "empty.m", "db", "types.xml"), "types")

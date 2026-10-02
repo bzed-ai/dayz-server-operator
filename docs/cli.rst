@@ -126,7 +126,7 @@ Backups
 
    * - ``dzo backup create | list | diff | prune <name>``
      - snapshots
-   * - ``dzo backup pin | unpin <id>``
+   * - ``dzo backup pin | unpin <name> <id>``
      - protect a snapshot from pruning
    * - ``dzo restore <name> <id> [--path <path>]``
      - full or partial restore

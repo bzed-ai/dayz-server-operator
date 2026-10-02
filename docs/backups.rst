@@ -6,8 +6,22 @@ Backups and restores
 
 Every instance lives in its own btrfs subvolume. A backup is a read-only btrfs
 snapshot of that subvolume: it takes milliseconds and costs almost no space
-until files change. Snapshots are taken with the server stopped, so they are
-consistent.
+until files change. A snapshot of a running server is crash-consistent, like a
+power cut; the snapshots taken before a change are taken with the server
+stopped.
+
+dzo creates the instance directory as a subvolume on its first
+``dzo instance render``, as the unprivileged service user, and everything below
+works without root. ``paths.instances`` and ``paths.snapshots`` must be on the
+same btrfs filesystem; on any other filesystem an instance runs, but
+``dzo backup`` refuses it and says why. ``dzo setup`` reports whether the
+filesystem is mounted with ``user_subvol_rm_allowed``, which makes deleting
+snapshots instant; without it dzo clears the read-only flag and removes the tree
+file by file, which is slower but needs no privileges.
+
+Snapshots live in ``<paths.snapshots>/<instance>/<time>-<reason>``, and
+``index.json`` next to them records each one (reason, time, state, pinned). dzo
+only ever acts on snapshots in that index.
 
 When snapshots are taken
 ------------------------
@@ -65,20 +79,25 @@ Old snapshots are pruned after each successful snapshot, by the daily
 
 .. code-block:: sh
 
-   dzo backup prune [<name>] --dry-run
-   dzo backup pin <id>        # never pruned automatically
-   dzo backup unpin <id>
+   dzo backup prune [<instance>] --dry-run
+   dzo backup pin <instance> <id>     # never pruned automatically
+   dzo backup unpin <instance> <id>
 
 dzo only deletes snapshots it has recorded. Unknown directories in the snapshot
-folder are reported, not deleted.
+folder are reported, not deleted, unless you pass ``--delete-orphans`` (or
+``--adopt-orphans`` to enter them into the index). ``keep`` is the total per
+instance, pinned snapshots included; the newest snapshot and ``min_keep``
+snapshots are never removed, whatever the other limits say. A snapshot that is
+being restored from is protected for the duration of the restore.
 
 Listing and comparing
 ---------------------
 
 .. code-block:: sh
 
-   dzo backup list [<name>]
-   dzo backup diff <id> [<id2>|live]
+   dzo backup create <instance> [--reason manual]
+   dzo backup list [<instance>]
+   dzo backup diff <instance> <id> [<id2>|live]
 
 Snapshots are plain read-only directories, so you can also browse them directly
 or download files in the web interface.
@@ -90,7 +109,7 @@ Full restore:
 
 .. code-block:: sh
 
-   dzo restore deerisle <id>
+   dzo restore deerisle <id>      # stops the instance if it runs, starts it again afterwards
 
 The instance is stopped, a safety snapshot is taken, the current data is moved
 aside (and kept as a snapshot), the backup becomes the live instance, and the
@@ -102,8 +121,14 @@ Restore only part of an instance, for example the world or one mod's data:
 
    dzo restore deerisle <id> --path mpmissions/empty.deerisle/storage_1
 
-The database (players, bans, schedules, users) is backed up separately every day
-and before database migrations.
+A restore takes a ``pre_restore`` snapshot first, so restoring the wrong snapshot
+can be undone, and the data it replaces is kept as a snapshot of reason
+``replaced``. If the restore fails, the instance is left as it was.
+
+What is not there yet: the periodic snapshots (``backup.schedule``) and the daily
+prune as systemd timers, the snapshot before a server or mod update (those
+changes are not automated yet), and the backup of the database, which does not
+exist yet.
 
 Offsite copies
 --------------

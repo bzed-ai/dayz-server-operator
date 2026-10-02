@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/bzed-ai/dayz-server-operator/internal/admin"
 )
@@ -118,6 +120,91 @@ type UpdatesConfig struct {
 type RestartsConfig struct {
 	Schedule []string `yaml:"schedule,omitempty"`
 	Announce Announce `yaml:"announce,omitempty"`
+}
+
+// Age is a duration that also takes days: "30d", "12h", "90m".
+type Age time.Duration
+
+// UnmarshalYAML implements yaml.Unmarshaler.
+func (a *Age) UnmarshalYAML(unmarshal func(any) error) error {
+	var s string
+	if err := unmarshal(&s); err != nil {
+		return err
+	}
+	if s == "" {
+		*a = 0
+		return nil
+	}
+	if n, ok := strings.CutSuffix(s, "d"); ok {
+		days, err := strconv.Atoi(n)
+		if err != nil || days < 0 {
+			return fmt.Errorf("site: invalid age %q", s)
+		}
+		*a = Age(time.Duration(days) * 24 * time.Hour)
+		return nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return fmt.Errorf("site: invalid age %q: %w", s, err)
+	}
+	*a = Age(d)
+	return nil
+}
+
+// Std returns the value as a plain time.Duration.
+func (a Age) Std() time.Duration { return time.Duration(a) }
+
+// Bytes is a size in bytes that takes units: "500MiB", "50GiB", "2TB", "1024".
+type Bytes int64
+
+var bytesRe = regexp.MustCompile(`^\s*(\d+)\s*([KMGT]?)(i?)B?\s*$`)
+
+// UnmarshalYAML implements yaml.Unmarshaler.
+func (b *Bytes) UnmarshalYAML(unmarshal func(any) error) error {
+	var s string
+	if err := unmarshal(&s); err != nil {
+		return err
+	}
+	if s == "" {
+		*b = 0
+		return nil
+	}
+	m := bytesRe.FindStringSubmatch(strings.ToUpper(s))
+	if m == nil {
+		return fmt.Errorf("site: invalid size %q", s)
+	}
+	n, _ := strconv.ParseInt(m[1], 10, 64)
+	base := int64(1000)
+	if m[3] == "I" {
+		base = 1024
+	}
+	for _, u := range []string{"K", "M", "G", "T"} {
+		if m[2] == "" {
+			break
+		}
+		n *= base
+		if m[2] == u {
+			break
+		}
+	}
+	*b = Bytes(n)
+	return nil
+}
+
+// BackupConfig is the snapshot policy of an instance (§C20): when snapshots
+// are taken, and how many are kept.
+type BackupConfig struct {
+	// Before lists the changes that take a snapshot first: update, mod_update,
+	// mission_update, config_change, render. Unset means the first four; an
+	// empty list means none.
+	Before []string `yaml:"before,omitempty"`
+	// Schedule is a systemd OnCalendar expression for periodic snapshots.
+	Schedule     string         `yaml:"schedule,omitempty"`
+	Keep         int            `yaml:"keep,omitempty"`
+	KeepByReason map[string]int `yaml:"keep_by_reason,omitempty"`
+	MaxAge       Age            `yaml:"max_age,omitempty"`
+	MinKeep      int            `yaml:"min_keep,omitempty"`
+	MinFreeBytes Bytes          `yaml:"min_free_bytes,omitempty"`
 }
 
 // HealthConfig drives HealthStartupRetries/HealthInterval (§C5/C9).
@@ -258,6 +345,7 @@ type Instance struct {
 	Notify          NotifyConfig    `yaml:"notify,omitempty"`
 	Container       ContainerConfig `yaml:"container,omitempty"`
 	Hooks           HooksConfig     `yaml:"hooks,omitempty"`
+	Backup          BackupConfig    `yaml:"backup,omitempty"`
 	Admin           AdminConfig     `yaml:"admin,omitempty"`
 	AdminMap        AdminMap        `yaml:"admin_map,omitempty"`
 }
