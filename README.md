@@ -78,6 +78,7 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 | `internal/servermods` | `make servermods`: packs `servermods/*/src/*` into reproducible PBOs with a prefix header, using [WoozyMasta/pbo](https://github.com/WoozyMasta/pbo) (MIT), and writes `compat.yaml` (dzo version, servermod commits, PBO hashes), which `dzo mod add\|update` checks shipped servermods against |
 | `internal/boottest` | `dzo test boot`: boots a real DayZServer from a disposable tree on a render of an instance and checks the logs (development machines only); `internal/runfiles` renders the keys, `serverDZ.cfg` and BattlEye config an instance needs besides its mission |
 | `internal/btrfs`, `internal/backup` | btrfs subvolumes and snapshots by ioctl as the unprivileged user; `dzo backup create\|list\|prune\|pin\|unpin\|diff` and `dzo restore`: an index of read-only snapshots, a retention policy (pure, property-tested), pre_restore safety snapshots, full and partial restore |
+| `internal/exporter` | `dzo exporter` and `dzo status`: the collector (systemd, podman, the Steam query, state files, the snapshot index) behind `/metrics` and `/status`, served over HTTP or TLS (certificate reloaded without a restart, mutual TLS, bearer token, IP allow-list) |
 | `internal/setup` | `dzo setup`: data directories and their checks, the two container images (`images/`), the Steam login hand-off, the site clone and the weekly image refresh timer |
 | `servermods/dzo-admin` | The Enforce Script servermod (submodule): state push, admin actions, marker API. Booted headless on 1.29 |
 | `internal/instance` | Ties the above into one instance's lifecycle: the F3 failed-render gate, quadlet+timer materialization, systemd start/stop/restart, and the BattlEye lock/kick graceful-restart sequence |
@@ -260,6 +261,12 @@ relying on them, roughly in the order they'd bite:
   database layer yet. Not built: the periodic and daily timers, snapshots before
   server and mod updates, the database backup, metrics, the web page. The tests
   skip without a btrfs filesystem (`DZO_BTRFS_TESTDIR`); CI mounts a loopback one.
+- **The exporter** (`internal/exporter`) was run against fakes for systemd, podman
+  and the Steam query, and against real files (a snapshot index, a render manifest,
+  the Steam status file); not against a real user systemd or podman. It reads
+  `podman inspect --format {{.State.Health.Status}}` of the container `dzo-<name>`,
+  and `systemctl --user show` of `dzo-<name>.service`. The restart counter is
+  systemd's, without reasons. There is no unit that runs it yet.
 - **Container images and `dzo setup`** (`images/`, `internal/setup`): both
   images were built with podman 5.8 on a development machine. Every shared
   library of the real 1.29 `DayZServer` resolves inside `dzo-runtime` (`ldd`),

@@ -63,10 +63,18 @@ type GlobalStatus struct {
 	DiskFreeBytes       int64             `json:"disk_free_bytes"`
 }
 
+// BackupStatus is the state of one instance's snapshots (§C20).
+type BackupStatus struct {
+	Instance    string           `json:"instance"`
+	Count       int              `json:"count"`                  // complete snapshots
+	LastSuccess map[string]int64 `json:"last_success_timestamp"` // by reason, unix seconds
+}
+
 // Snapshot is the full payload behind /metrics and /status.
 type Snapshot struct {
 	Global    GlobalStatus     `json:"global"`
 	Instances []InstanceStatus `json:"instances"`
+	Backups   []BackupStatus   `json:"backups,omitempty"`
 }
 
 // Source supplies a fresh Snapshot at scrape time (pull-based, matching

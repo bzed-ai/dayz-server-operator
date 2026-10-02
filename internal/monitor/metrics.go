@@ -199,6 +199,15 @@ func WriteMetrics(w io.Writer, s Snapshot) error {
 		b.addInt("dzo_instance_mods_pending_update", labels, inst.ModsPendingUpdate)
 	}
 
+	b.declare("dzo_backup_count", "Complete snapshots of the instance.", "gauge")
+	b.declare("dzo_backup_last_success_timestamp", "Unix time of the newest snapshot, by reason.", "gauge")
+	for _, bs := range s.Backups {
+		b.addInt("dzo_backup_count", map[string]string{"instance": bs.Instance}, bs.Count)
+		for _, reason := range sortedKeys(bs.LastSuccess) {
+			b.add("dzo_backup_last_success_timestamp", map[string]string{"instance": bs.Instance, "reason": reason}, float64(bs.LastSuccess[reason]))
+		}
+	}
+
 	return b.render(w)
 }
 

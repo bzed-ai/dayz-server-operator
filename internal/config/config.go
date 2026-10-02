@@ -113,6 +113,21 @@ type Web struct {
 	Backends   []Backend `yaml:"backends"`
 }
 
+// Exporter configures `dzo exporter`: /metrics for Prometheus and /status for
+// Icinga (§C9). It listens on plain HTTP unless TLS is configured.
+type Exporter struct {
+	Listen string `yaml:"listen"`
+	TLS    struct {
+		CertFile     string `yaml:"cert_file"`
+		KeyFile      string `yaml:"key_file"`
+		ClientCAFile string `yaml:"client_ca_file"` // set for mutual TLS
+	} `yaml:"tls"`
+	// Allow lists the networks (CIDR) that may connect; empty allows all.
+	Allow []string `yaml:"allow"`
+	// BearerTokenFile, if set, makes every request need that token.
+	BearerTokenFile string `yaml:"bearer_token_file"`
+}
+
 // MapTiles says where each map's tile source comes from. A map is named like
 // the world of its mission (chernarusplus, enoch, sakhal, deerisle).
 type MapTiles struct {
@@ -133,6 +148,7 @@ type Config struct {
 	Serve    Serve              `yaml:"serve"`
 	Web      Web                `yaml:"web"`
 	MapTiles MapTiles           `yaml:"map_tiles"`
+	Exporter Exporter           `yaml:"exporter"`
 	Products map[string]Product `yaml:"products"`
 	Notify   Notify             `yaml:"notify"`
 }
@@ -154,8 +170,9 @@ func defaultsTemplated() *Config {
 			DB:        "${data}/db",
 			Site:      "${data}/site",
 		},
-		Serve: Serve{Installation: "default", Listen: "127.0.0.1:8080", ModListen: "127.0.0.1:2400"},
-		Web:   Web{Listen: "127.0.0.1:8081", Assets: "/usr/share/javascript", DocsDir: "/usr/share/doc/dzo/html"},
+		Serve:    Serve{Installation: "default", Listen: "127.0.0.1:8080", ModListen: "127.0.0.1:2400"},
+		Web:      Web{Listen: "127.0.0.1:8081", Assets: "/usr/share/javascript", DocsDir: "/usr/share/doc/dzo/html"},
+		Exporter: Exporter{Listen: ":9464"},
 		Products: map[string]Product{
 			"dayz-stable": {
 				AppID:         223350,
@@ -246,6 +263,18 @@ func (c *Config) Validate() error {
 		if !filepath.IsAbs(p) {
 			errs = append(errs, fmt.Sprintf("%s: %q is not an absolute path", name, p))
 		}
+	}
+
+	for _, cidr := range c.Exporter.Allow {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			errs = append(errs, fmt.Sprintf("exporter.allow: %q is not a CIDR network", cidr))
+		}
+	}
+	if (c.Exporter.TLS.CertFile == "") != (c.Exporter.TLS.KeyFile == "") {
+		errs = append(errs, "exporter.tls: cert_file and key_file go together")
+	}
+	if c.Exporter.TLS.ClientCAFile != "" && c.Exporter.TLS.CertFile == "" {
+		errs = append(errs, "exporter.tls.client_ca_file needs cert_file and key_file")
 	}
 
 	if c.Site.Remote != "" {

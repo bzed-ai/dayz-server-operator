@@ -36,6 +36,21 @@ up automatically. Game servers are never involved, so a certificate change never
 restarts a server. An invalid new certificate is rejected and the old one stays
 active.
 
+Run it with ``dzo exporter`` (the unit does that). It answers from a snapshot that is
+refreshed every 15 seconds in the background, so a scrape never waits for a game
+server; the expensive values, the size of the cache and the mission drift count, are
+refreshed every 10 minutes. ``dzo status [<instance>] [--json]`` prints what the
+exporter would report, and ``dzo status --write /run/dzo/status`` also writes the
+local status files, one per instance, for debugging.
+
+What it reads: systemd (``ActiveState``, restart count, start time), podman (the
+container's health), the Steam query on the instance's query port (players, round
+trip), the manifest and the failed-render gate of the instance (last render), the
+snapshot index (backups) and the Steam login status. The restart counter is
+systemd's own, reported as ``reason="all"``: the reasons ``crash``, ``health``,
+``scheduled``, ``update`` and ``manual`` are not told apart yet. In-game metrics from
+MetricZ are not included.
+
 Main metrics
 ------------
 
@@ -58,6 +73,10 @@ Main metrics
      - managed mission files changed outside dzo
    * - ``dzo_instance_mods_pending_update``
      - mod updates waiting for a restart
+   * - ``dzo_backup_count{instance}``
+     - complete snapshots
+   * - ``dzo_backup_last_success_timestamp{instance,reason}``
+     - time of the newest snapshot per reason
    * - ``dzo_product_update_available``
      - a new server build is available (manual upgrade needed)
    * - ``dzo_steam_session_valid``

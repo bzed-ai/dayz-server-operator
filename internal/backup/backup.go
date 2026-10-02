@@ -112,6 +112,12 @@ func (m *Manager) load() ([]Snapshot, error) {
 	return ix.Snapshots, nil
 }
 
+// ReadIndex reads the index of a snapshot root without locking it or recovering
+// anything: for monitoring, which must never write.
+func ReadIndex(root string) ([]Snapshot, error) {
+	return (&Manager{Root: root}).load()
+}
+
 func (m *Manager) save(ss []Snapshot) error {
 	sort.SliceStable(ss, func(i, j int) bool { return ss[i].Created.Before(ss[j].Created) })
 	b, err := json.MarshalIndent(index{Snapshots: ss}, "", "  ")

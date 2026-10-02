@@ -69,8 +69,10 @@ Instances
      - start, stop (stays stopped)
    * - ``dzo restart <name> [--minutes N --lock N --delay N --text T] [--now] [--cancel]``
      - graceful restart
-   * - ``dzo status [<name>]``
-     - build, mods, state, players, pending updates
+   * - ``dzo status [<name>] [--json] [--write <dir>]``
+     - state, players, health, restarts, last render (what the exporter reports)
+   * - ``dzo exporter``
+     - serve ``/metrics`` and ``/status`` (the exporter unit runs this)
    * - ``dzo logs <name> [-f]``
      - server console
    * - ``dzo shell <name>`` / ``dzo exec <name> …``

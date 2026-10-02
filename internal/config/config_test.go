@@ -245,3 +245,24 @@ func TestValidateListenAndBackends(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestExporterConfig(t *testing.T) {
+	c, err := Parse([]byte("paths: {data: /srv/x}\n"))
+	if err != nil || c.Exporter.Listen != ":9464" || len(c.Exporter.Allow) != 0 {
+		t.Fatalf("defaults: %+v %v", c.Exporter, err)
+	}
+	c, err = Parse([]byte("exporter:\n  listen: 127.0.0.1:9\n  allow: [192.0.2.0/24, '2001:db8::/32']\n  tls: {cert_file: /c, key_file: /k, client_ca_file: /ca}\n  bearer_token_file: /t\n"))
+	if err != nil || c.Exporter.Listen != "127.0.0.1:9" || len(c.Exporter.Allow) != 2 || c.Exporter.TLS.ClientCAFile != "/ca" || c.Exporter.BearerTokenFile != "/t" {
+		t.Fatalf("parsed: %+v %v", c.Exporter, err)
+	}
+	for yaml, want := range map[string]string{
+		"exporter: {allow: [nope]}":              "CIDR",
+		"exporter: {tls: {cert_file: /c}}":       "go together",
+		"exporter: {tls: {client_ca_file: /ca}}": "needs cert_file",
+		"exporter: {allow: ['192.0.2.1']}":       "CIDR",
+	} {
+		if _, err := Parse([]byte(yaml)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: want an error with %q, got %v", yaml, want, err)
+		}
+	}
+}

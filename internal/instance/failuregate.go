@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+// GateFile is where an instance keeps its failed-render gate: in its runtime
+// directory, next to the files the render writes.
+func GateFile(runtimeDir string) string { return filepath.Join(runtimeDir, "failed-render.json") }
+
 // GateState is the persisted failed-render gate for one instance (F3
 // layer 2): once a start's pre-flight render fails, further starts with
 // the same InputHash are refused without retrying the render, until the
