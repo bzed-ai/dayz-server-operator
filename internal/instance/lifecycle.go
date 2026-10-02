@@ -91,3 +91,17 @@ func (l Lifecycle) DaemonReload(ctx context.Context) error {
 	_, err := l.run(ctx, "daemon-reload")
 	return err
 }
+
+// EnableNow runs `systemctl --user enable --now <units>`: timers and the
+// exporter, never a game server.
+func (l Lifecycle) EnableNow(ctx context.Context, units ...string) error {
+	_, err := l.run(ctx, append([]string{"enable", "--now"}, units...)...)
+	return err
+}
+
+// Disable runs `systemctl --user disable --now <units>`, for units dzo no
+// longer generates. A unit that is already gone is not an error.
+func (l Lifecycle) Disable(ctx context.Context, units ...string) error {
+	_, err := l.run(ctx, append([]string{"disable", "--now"}, units...)...)
+	return err
+}

@@ -206,3 +206,27 @@ stored by default. When Steam ends the session:
 dzo never retries a failed password or code automatically, so it cannot lock
 the account. The hourly check also tests the session, so an expired login is
 noticed before an update needs it.
+
+The update engine
+-----------------
+
+``dzo-update-check.timer`` runs ``dzo update check --apply`` hourly. For every
+instance whose ``check_interval`` is due it refreshes the mods, then compares
+what the running unit uses with the cache. A difference is a pending update.
+
+* ``auto``: inside the update window (and outside ``quiet_hours``), after
+  ``batch_delay`` and respecting ``min_restart_interval``, the instance is
+  restarted in one announced cycle: countdown, lock, kick, stop, snapshot,
+  new unit, start. ``max_delay`` forces the update. A scheduled restart that is
+  due soon is used instead if ``apply_with_scheduled_restart`` is set.
+* ``notify``: the admins are told once per set of pending updates.
+* ``manual``: the update is only recorded (``dzo update status``).
+
+A running instance keeps its unit until it is restarted, so ``dzo units sync``
+never changes a server under players; ``--deploy <name>`` writes the new
+generations at once. A new server build is only reported, never applied
+automatically. While Steam wants a login nothing is downloaded or restarted.
+
+``dzo restart <name>`` does the same cycle by hand; ``--cancel`` ends a running
+countdown and unlocks the server. ``dzo update gc`` removes generations nobody
+uses any more.
