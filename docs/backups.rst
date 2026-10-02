@@ -116,8 +116,7 @@ aside (and kept as a snapshot), the backup becomes the live instance, and the
 server starts.
 
 Restore only part of an instance, for example the world or one mod's data (the
-world is below ``storage/<map>``; snapshots taken before dzo moved it there have it
-in ``mpmissions/<map>/storage_1``):
+world is below ``storage/<map>``):
 
 .. code-block:: sh
 
