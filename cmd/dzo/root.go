@@ -47,6 +47,7 @@ func newRootCmd() *cobra.Command {
 		newServermodsCmd(),
 		newMapCmd(),
 		newSetupCmd(),
+		newTestCmd(),
 	)
 	return root
 }

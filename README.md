@@ -42,7 +42,7 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 > part of the web platform: the `dzo-admin` servermod, the JSON API and a web
 > interface for players, vehicles and a live map. Not built yet: web users
 > with passwords and TOTP, the player/ban database, restart timers and
-> scheduled broadcasts, and everything in M7-M9 of
+> scheduled broadcasts, and everything in M8-M9 of
 > [MILESTONES.md](MILESTONES.md). See
 > [Needs live verification](#needs-live-verification) below for what
 > hasn't been checked against a real Steam account or DayZ server, and
@@ -76,6 +76,7 @@ documentation is a [Sphinx site](docs/) under `docs/`.
 | `internal/serve` | `dzo serve`: the API and mod listeners, the mod's `config.json` written at render time |
 | `internal/web` | The web interface (`dzo web`): server-rendered pages, htmx, a Leaflet map; talks to installations only through their API |
 | `internal/servermods` | `make servermods`: packs `servermods/*/src/*` into reproducible PBOs with a prefix header, using [WoozyMasta/pbo](https://github.com/WoozyMasta/pbo) (MIT), and writes `compat.yaml` (dzo version, servermod commits, PBO hashes), which `dzo mod add\|update` checks shipped servermods against |
+| `internal/boottest` | `dzo test boot`: boots a real DayZServer from a disposable tree on a render of an instance and checks the logs (development machines only); `internal/runfiles` renders the keys, `serverDZ.cfg` and BattlEye config an instance needs besides its mission |
 | `internal/setup` | `dzo setup`: data directories and their checks, the two container images (`images/`), the Steam login hand-off, the site clone and the weekly image refresh timer |
 | `servermods/dzo-admin` | The Enforce Script servermod (submodule): state push, admin actions, marker API. Booted headless on 1.29 |
 | `internal/instance` | Ties the above into one instance's lifecycle: the F3 failed-render gate, quadlet+timer materialization, systemd start/stop/restart, and the BattlEye lock/kick graceful-restart sequence |
@@ -240,6 +241,15 @@ relying on them, roughly in the order they'd bite:
   mission's `mapgrouppos.xml`), not against the automatic client-depot
   download of the plan, which is not built: the PBO is configured or passed on
   the command line.
+- **`dzo test boot`** was run against a real `DayZServer` 1.29 (build 24570360)
+  installed by Steam, with the Central Economy mission and dzo-admin: it passes on a
+  good instance and fails on a mission script error, an XML file that does not
+  parse and a missing `<ce folder>`; the logs of those runs are the test fixtures.
+  Not covered: booting inside the runtime container, mods from the Workshop
+  (only dzo-admin was used), the experimental server, Windows, and
+  `cfggameplay.json` (the server only reads it with `enableCfgGameplayFile = 1`).
+  The Steam query answers long before the mission has loaded, so readiness waits
+  for the mission and the mod's first contact.
 - **Container images and `dzo setup`** (`images/`, `internal/setup`): both
   images were built with podman 5.8 on a development machine. Every shared
   library of the real 1.29 `DayZServer` resolves inside `dzo-runtime` (`ldd`),

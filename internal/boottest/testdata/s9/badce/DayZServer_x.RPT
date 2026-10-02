@@ -1,0 +1,40 @@
+19:13:27 !!! [Inputs] Cannot load input preset "#STR_USER", file does not exist
+19:13:27 ANIMATION (E): Can't load sakhal/Anims/cfg/skeletons.anim.xml
+19:13:27 ANIMATION (E): Failed to open file, line 0, column 0
+19:13:27 ANIMATION (E): Can't load @dzo-admin/Anims/cfg/skeletons.anim.xml
+19:13:27 ANIMATION (E): Failed to open file, line 0, column 0
+19:13:29    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:13:29    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASBroadcasterType'
+19:13:29    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:13:29    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:13:29    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:13:29    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:13:30    ENTITY    (E): Type 'HouseType' must be inherited from class 'StaticTransmitterType'
+19:13:38 !!! [CE][LoadPrototype] 5 groups have no points...
+19:13:38 [CE][LoadMap] "Group" :: loaded 11680 groups, groups failed: 0, largest group range: 34.2
+19:13:38 [CE][LoadMap] "Dirt" :: loaded 0 groups, groups failed: 0, largest group range: 34.2
+19:13:38 !!! [CE][offlineDB] :: No Shutdown message present.
+19:13:38 !!! [CE][offlineDB] :: Type 'ChristmasTree' will be ignored. (Not spawnable. (Scope is not public?))
+19:13:38 !!! [CE][offlineDB] :: Type 'Static_FrozenScientist_DE' will be ignored. (Type does not exist. (Typo?))
+19:13:38 !!! File "DZ\worlds\chernarusplus\ce\nonexistent_folder/types.xml" does not exist...
+19:13:38 !!! [ERROR][XML] :: load [DZ\worlds\chernarusplus\ce\nonexistent_folder/types.xml] failed
+19:13:38 !!! [ERROR][XML] :: Failed to open file
+19:13:38 !!! [CE][offlineDB] :: Failed to read types file 'nonexistent_folder/types.xml'.
+19:13:38 [CE][offlineDB] :: Failed to read types file 'nonexistent_folder/types.xml'.
+19:13:38 !!! [CE][DE][SPAWNS] :: [WARNING] :: Skipping entry for non-existing event 'VehicleTransitBus'.
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:13:38   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'

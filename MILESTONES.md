@@ -114,6 +114,10 @@ analyzer are not submodules yet; adding one is a `.gitmodules` entry and a
 - Acceptance: green against the fake; document the manual procedure for the
   real server.
 
+Status: done, and also run against a real 1.29 server on a development machine.
+Native mode only (no `--container`). `dzo instance render` now also writes the
+runtime files the boot needs (keys, `serverDZ.cfg`, BattlEye config).
+
 ## M8: Example site config and first instance  [C21]
 
 - `dzo legacy convert-config` from `../dayzdockerserver` for hashima first,

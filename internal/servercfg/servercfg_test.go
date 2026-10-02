@@ -221,3 +221,72 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+const withClass = `hostname = "x";
+class Missions
+{
+    class DayZ
+    {
+        template="dayzOffline.chernarusplus"; // Mission to load
+    };
+};
+maxPlayers = 60;
+`
+
+func TestClassBlocksParseAndRoundTrip(t *testing.T) {
+	f, err := Parse([]byte(withClass))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e, ok := f.GetPath([]string{"Missions", "DayZ"}, "template"); !ok || e.Scalar.Value != "dayzOffline.chernarusplus" {
+		t.Fatalf("template = %+v %v", e, ok)
+	}
+	if e, ok := f.Get("Missions"); !ok || !e.IsClass {
+		t.Errorf("Missions must be a class entry: %+v", e)
+	}
+	again, err := Parse(f.Bytes())
+	if err != nil || string(again.Bytes()) != string(f.Bytes()) {
+		t.Fatalf("round trip: %v\n%s\nvs\n%s", err, f.Bytes(), again.Bytes())
+	}
+	if keys := f.Keys(); strings.Join(keys, ",") != "hostname,Missions,maxPlayers" {
+		t.Errorf("keys keep their order: %v", keys)
+	}
+}
+
+func TestSetPathScalarCreatesAndReplaces(t *testing.T) {
+	f, _ := Parse([]byte(withClass))
+	f.SetPathScalar([]string{"Missions", "DayZ"}, "template", "enoch", true)
+	f.SetPathScalar([]string{"Other", "Deep"}, "k", "1", false)
+	if e, _ := f.GetPath([]string{"Missions", "DayZ"}, "template"); e.Scalar.Value != "enoch" {
+		t.Errorf("template = %q", e.Scalar.Value)
+	}
+	if e, ok := f.GetPath([]string{"Other", "Deep"}, "k"); !ok || e.Scalar.Value != "1" {
+		t.Errorf("created path: %+v", e)
+	}
+	if _, ok := f.GetPath([]string{"Nope"}, "k"); ok {
+		t.Error("a missing class has no entries")
+	}
+	if _, ok := f.GetPath([]string{"hostname"}, "k"); ok {
+		t.Error("a scalar is not a class")
+	}
+}
+
+func TestDiffSeesInsideClasses(t *testing.T) {
+	a, _ := Parse([]byte(withClass))
+	b, _ := Parse([]byte(strings.Replace(withClass, "chernarusplus", "enoch", 1)))
+	d := DiffFiles(a, b)
+	if len(d.Changed) != 1 || d.Changed[0].Key != "Missions/DayZ/template" {
+		t.Errorf("diff = %+v", d)
+	}
+	if !DiffFiles(a, a).Empty() {
+		t.Error("the same file differs from itself")
+	}
+}
+
+func TestClassParseErrors(t *testing.T) {
+	for _, bad := range []string{"class {};", "class A", "class A {", "class A { x = 1; }", "class A { x = ; };"} {
+		if _, err := Parse([]byte(bad)); err == nil {
+			t.Errorf("%q must not parse", bad)
+		}
+	}
+}

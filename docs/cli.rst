@@ -206,5 +206,7 @@ Migration and development
 
    * - ``dzo legacy convert-config --repo <dir> --ref <branch>… --out <dir>``
      - example site config from dayzdockerserver branches
-   * - ``dzo test boot <name> [--server steam|<dir>] [--native|--container]``
+   * - ``dzo test boot <name> [--server steam|<dir>] [--mods-from …] [--expect <re>] [--out <dir>]``
      - boot a real server on a render result (development machines only)
+   * - ``dzo test boot --vanilla <name>``
+     - boot the unmodded server and record the baseline of this server build

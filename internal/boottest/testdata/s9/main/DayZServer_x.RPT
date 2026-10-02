@@ -1,0 +1,40 @@
+19:11:12 !!! [Inputs] Cannot load input preset "#STR_USER", file does not exist
+19:11:13 ANIMATION (E): Can't load sakhal/Anims/cfg/skeletons.anim.xml
+19:11:13 ANIMATION (E): Failed to open file, line 0, column 0
+19:11:13 ANIMATION (E): Can't load @dzo-admin/Anims/cfg/skeletons.anim.xml
+19:11:13 ANIMATION (E): Failed to open file, line 0, column 0
+19:11:14    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:11:14    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASBroadcasterType'
+19:11:15    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:11:15    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:11:15    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:11:15    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:11:16    ENTITY    (E): Type 'HouseType' must be inherited from class 'StaticTransmitterType'
+19:11:23 !!! [CE][LoadPrototype] 5 groups have no points...
+19:11:24 [CE][LoadMap] "Group" :: loaded 11680 groups, groups failed: 0, largest group range: 34.2
+19:11:24 [CE][LoadMap] "Dirt" :: loaded 0 groups, groups failed: 0, largest group range: 34.2
+19:11:24 !!! [CE][offlineDB] :: No Shutdown message present.
+19:11:24 !!! [CE][offlineDB] :: Type 'ChristmasTree' will be ignored. (Not spawnable. (Scope is not public?))
+19:11:24 !!! [CE][offlineDB] :: Type 'Static_FrozenScientist_DE' will be ignored. (Type does not exist. (Typo?))
+19:11:24 !!! [CE][DE][SPAWNS] :: [WARNING] :: Skipping entry for non-existing event 'VehicleTransitBus'.
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:24   MATERIAL  (E): Object dz/characters/zombies/z_hermit_m.xob - cannot load material Material_1.emat
+19:11:24   ENTITY    (E): Type 'Inventory_BaseType' must be inherited from class 'ClothingType'
+19:11:24   ENTITY    (E): Type 'Inventory_BaseType' must be inherited from class 'ClothingType'

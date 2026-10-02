@@ -36,20 +36,12 @@ type RenderInput struct {
 // live dir is the one-time initialisation; later renders only touch files in
 // the manifest or new in pristine. Nothing is written when the plan fails.
 func Render(in RenderInput) (Plan, Report, error) {
-	staging, err := os.MkdirTemp("", "dzo-staging-")
+	staging, err := BuildStaging(in)
 	if err != nil {
-		return Plan{}, Report{}, fmt.Errorf("mission: %w", err)
+		return Plan{}, Report{}, err
 	}
 	defer os.RemoveAll(staging) //nolint:errcheck // scratch dir
 
-	if err := CopyPristine(in.PristineDir, staging); err != nil {
-		return Plan{}, Report{}, err
-	}
-	if in.FallbackDir != "" {
-		if err := fillFromFallback(in.FallbackDir, staging); err != nil {
-			return Plan{}, Report{}, err
-		}
-	}
 	manifest, err := LoadManifest(in.ManifestPath)
 	if err != nil {
 		return Plan{}, Report{}, err
@@ -66,6 +58,28 @@ func Render(in RenderInput) (Plan, Report, error) {
 		return plan, report, err
 	}
 	return plan, report, manifest.Save(in.ManifestPath)
+}
+
+// BuildStaging writes what a render would apply, the pristine mission plus the
+// fallback fill, into a new temporary directory and returns it; the caller
+// removes it. It touches neither the live mission nor the manifest, which is
+// what the boot test feeds to a disposable server tree.
+func BuildStaging(in RenderInput) (string, error) {
+	staging, err := os.MkdirTemp("", "dzo-staging-")
+	if err != nil {
+		return "", fmt.Errorf("mission: %w", err)
+	}
+	if err := CopyPristine(in.PristineDir, staging); err != nil {
+		_ = os.RemoveAll(staging)
+		return "", err
+	}
+	if in.FallbackDir != "" {
+		if err := fillFromFallback(in.FallbackDir, staging); err != nil {
+			_ = os.RemoveAll(staging)
+			return "", err
+		}
+	}
+	return staging, nil
 }
 
 func fillFromFallback(fallbackDir, staging string) error {

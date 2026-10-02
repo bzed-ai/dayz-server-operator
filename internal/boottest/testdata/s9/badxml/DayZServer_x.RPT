@@ -1,0 +1,40 @@
+19:11:46 !!! [Inputs] Cannot load input preset "#STR_USER", file does not exist
+19:11:47 ANIMATION (E): Can't load sakhal/Anims/cfg/skeletons.anim.xml
+19:11:47 ANIMATION (E): Failed to open file, line 0, column 0
+19:11:47 ANIMATION (E): Can't load @dzo-admin/Anims/cfg/skeletons.anim.xml
+19:11:47 ANIMATION (E): Failed to open file, line 0, column 0
+19:11:48    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:11:48    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASBroadcasterType'
+19:11:48    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:11:48    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:11:49    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:11:49    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:11:50    ENTITY    (E): Type 'HouseType' must be inherited from class 'StaticTransmitterType'
+19:11:57 !!! [CE][LoadPrototype] 5 groups have no points...
+19:11:58 [CE][LoadMap] "Group" :: loaded 11680 groups, groups failed: 0, largest group range: 34.2
+19:11:58 [CE][LoadMap] "Dirt" :: loaded 0 groups, groups failed: 0, largest group range: 34.2
+19:11:58 !!! [CE][offlineDB] :: No Shutdown message present.
+19:11:58 !!! [ERROR][XML] :: load [$CurrentDir:mpmissions/dayzOffline.chernarusplus/db/types.xml] failed
+19:11:58 !!! [ERROR][XML] :: Error reading end tag. line 23620
+19:11:58 !!! [CE][offlineDB] :: Failed to read types file 'db/types.xml'.
+19:11:58 [CE][offlineDB] :: Failed to read types file 'db/types.xml'.
+19:11:58 !!! [CE][DE][SPAWNS] :: [WARNING] :: Skipping entry for non-existing event 'VehicleTransitBus'.
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'
+19:11:58   ENTITY    (E): Type 'ManType' must be inherited from class 'DayZAnimalType'

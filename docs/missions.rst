@@ -74,6 +74,16 @@ every later render only touches files dzo manages (in the manifest, or new in
 the pristine mission). ``storage_*`` and everything matching
 ``mission.unmanaged`` is never written.
 
+The render also prepares what the server needs besides the mission: the signature
+keys (``runtime/keys``: the server build's and those of every client mod, copied
+because the container cannot follow links into the cache), ``runtime/serverDZ.cfg``
+from the site repository's ``instances/<name>/serverDZ.cfg``, and the BattlEye
+config with the RCon port and a password that dzo generates once and keeps below
+``paths.secrets``. In ``serverDZ.cfg`` dzo sets ``Missions/DayZ/template`` to the
+instance's ``map`` and ``steamQueryPort`` to ``ports.query``; everything else stays
+as you wrote it. A missing or unparsable ``serverDZ.cfg`` fails the render before
+the live mission is touched, also with ``--dry-run``.
+
 The pristine mission is fetched from ``mission_source`` (a git repo, ``ref`` and
 ``path``) the first time it is missing, and never again on its own, so a start
 does not need the network. ``--update-pristine`` fetches it again; the live

@@ -50,7 +50,7 @@ Create ``instances/chernarus/instance.yaml`` in the site repository:
      schedule: ["*-*-* 00/4:00"]   # every 4 hours
 
 Add a ``serverDZ.cfg`` next to it (your usual server settings; dzo sets the
-ports, ``template`` and ``instanceId`` itself), commit and pull:
+mission ``template`` and the Steam query port itself), commit and pull:
 
 .. code-block:: sh
 

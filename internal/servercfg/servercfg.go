@@ -28,17 +28,22 @@ func (i Item) render() string {
 	return i.Value
 }
 
-// Entry is one parsed "key = ...;" statement.
+// Entry is one parsed "key = ...;" statement, or a "class Name { ... };" block.
 type Entry struct {
 	Key     string
 	IsArray bool
-	Scalar  Item   // valid when !IsArray
+	IsClass bool
+	Scalar  Item   // valid for a scalar
 	Array   []Item // valid when IsArray
+	Class   *File  // valid when IsClass: the entries of the block
 }
 
 // Render returns the value portion of the entry, formatted the way it would
 // be written back out. Used for diffing and for the on-disk representation.
 func (e *Entry) Render() string {
+	if e.IsClass {
+		return "{...}"
+	}
 	if !e.IsArray {
 		return e.Scalar.render()
 	}
@@ -50,6 +55,9 @@ func (e *Entry) Render() string {
 }
 
 func (e *Entry) String() string {
+	if e.IsClass {
+		return "class " + e.Key + " {...};"
+	}
 	name := e.Key
 	if e.IsArray {
 		name += "[]"
@@ -108,14 +116,71 @@ func (f *File) set(key string, e *Entry) {
 }
 
 // Bytes serializes the file, one "key = value;" statement per line, in
-// insertion order.
+// insertion order; class blocks are written indented.
 func (f *File) Bytes() []byte {
 	var b strings.Builder
-	for _, e := range f.entries {
-		b.WriteString(e.String())
-		b.WriteByte('\n')
-	}
+	f.write(&b, "")
 	return []byte(b.String())
+}
+
+func (f *File) write(b *strings.Builder, indent string) {
+	for _, e := range f.entries {
+		if !e.IsClass {
+			b.WriteString(indent + e.String() + "\n")
+			continue
+		}
+		b.WriteString(indent + "class " + e.Key + "\n" + indent + "{\n")
+		e.Class.write(b, indent+"    ")
+		b.WriteString(indent + "};\n")
+	}
+}
+
+// class returns the class block of that name, creating it if need be.
+func (f *File) class(name string) *File {
+	if i, ok := f.index[name]; ok && f.entries[i].IsClass {
+		return f.entries[i].Class
+	}
+	c := newFile()
+	f.set(name, &Entry{Key: name, IsClass: true, Class: c})
+	return c
+}
+
+// SetPathScalar sets a scalar inside nested class blocks, creating them:
+// SetPathScalar([]string{"Missions", "DayZ"}, "template", "x", true).
+func (f *File) SetPathScalar(path []string, key, value string, quoted bool) {
+	for _, c := range path {
+		f = f.class(c)
+	}
+	f.SetScalar(key, value, quoted)
+}
+
+// GetPath returns the entry key inside nested class blocks.
+func (f *File) GetPath(path []string, key string) (*Entry, bool) {
+	for _, c := range path {
+		i, ok := f.index[c]
+		if !ok || !f.entries[i].IsClass {
+			return nil, false
+		}
+		f = f.entries[i].Class
+	}
+	return f.Get(key)
+}
+
+// leaves returns the entries that are not classes, by path ("Missions/DayZ/template"),
+// in file order.
+func (f *File) leaves(prefix string, out *[]leaf) {
+	for _, e := range f.entries {
+		if e.IsClass {
+			e.Class.leaves(prefix+e.Key+"/", out)
+			continue
+		}
+		*out = append(*out, leaf{prefix + e.Key, e})
+	}
+}
+
+type leaf struct {
+	path  string
+	entry *Entry
 }
 
 func (f *File) String() string { return string(f.Bytes()) }
@@ -190,6 +255,9 @@ func (p *parser) parseEntry() (*Entry, error) {
 	if key == "" {
 		return nil, fmt.Errorf("unexpected character %q at offset %d", p.src[p.pos], p.pos)
 	}
+	if key == "class" {
+		return p.parseClass()
+	}
 
 	p.skipSpaceAndComments()
 	isArray := false
@@ -225,6 +293,46 @@ func (p *parser) parseEntry() (*Entry, error) {
 	}
 	p.pos++
 	return e, nil
+}
+
+// parseClass reads the rest of "class Name { entries };" after the keyword.
+func (p *parser) parseClass() (*Entry, error) {
+	p.skipSpaceAndComments()
+	start := p.pos
+	for !p.eof() && isKeyChar(p.src[p.pos]) {
+		p.pos++
+	}
+	name := p.src[start:p.pos]
+	if name == "" {
+		return nil, fmt.Errorf("expected a class name at offset %d", start)
+	}
+	p.skipSpaceAndComments()
+	if p.eof() || p.src[p.pos] != '{' {
+		return nil, fmt.Errorf("expected '{' after class %q", name)
+	}
+	p.pos++
+	body := newFile()
+	for {
+		p.skipSpaceAndComments()
+		if p.eof() {
+			return nil, fmt.Errorf("unterminated class %q", name)
+		}
+		if p.src[p.pos] == '}' {
+			p.pos++
+			break
+		}
+		e, err := p.parseEntry()
+		if err != nil {
+			return nil, err
+		}
+		body.set(e.Key, e)
+	}
+	p.skipSpaceAndComments()
+	if p.eof() || p.src[p.pos] != ';' {
+		return nil, fmt.Errorf("expected ';' after class %q", name)
+	}
+	p.pos++
+	return &Entry{Key: name, IsClass: true, Class: body}, nil
 }
 
 func (p *parser) parseArray() ([]Item, error) {
@@ -316,24 +424,29 @@ func (d Diff) Empty() bool {
 // formatting and key order.
 func DiffFiles(oldFile, newFile *File) Diff {
 	var d Diff
-	for _, key := range newFile.Keys() {
-		newEntry, _ := newFile.Get(key)
-		oldEntry, existed := oldFile.Get(key)
+	var oldLeaves, newLeaves []leaf
+	oldFile.leaves("", &oldLeaves)
+	newFile.leaves("", &newLeaves)
+	old, cur := map[string]*Entry{}, map[string]*Entry{}
+	for _, l := range oldLeaves {
+		old[l.path] = l.entry
+	}
+	for _, l := range newLeaves {
+		cur[l.path] = l.entry
+	}
+	for _, l := range newLeaves {
+		oldEntry, existed := old[l.path]
 		if !existed {
-			d.Added = append(d.Added, key)
+			d.Added = append(d.Added, l.path)
 			continue
 		}
-		if oldEntry.Render() != newEntry.Render() {
-			d.Changed = append(d.Changed, ChangedEntry{
-				Key: key,
-				Old: oldEntry.Render(),
-				New: newEntry.Render(),
-			})
+		if oldEntry.Render() != l.entry.Render() {
+			d.Changed = append(d.Changed, ChangedEntry{Key: l.path, Old: oldEntry.Render(), New: l.entry.Render()})
 		}
 	}
-	for _, key := range oldFile.Keys() {
-		if _, ok := newFile.Get(key); !ok {
-			d.Removed = append(d.Removed, key)
+	for _, l := range oldLeaves {
+		if _, ok := cur[l.path]; !ok {
+			d.Removed = append(d.Removed, l.path)
 		}
 	}
 	sort.Strings(d.Added)

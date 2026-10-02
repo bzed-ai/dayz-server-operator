@@ -51,11 +51,13 @@ product: dayz-stable
 map: empty.m
 mission_source: {git: `+missionRepo+`, ref: main, path: empty.m}
 fallback_mission: dayzOffline.fb
-ports: {game: 2302}
+ports: {game: 2302, rcon: 2306, query: 27016}
 network: host
 `)
+	writeFile(t, filepath.Join(data, "site", "instances", "x", "serverDZ.cfg"), "hostname = \"x\";\ntemplate = \"stale\";\n")
 	build := filepath.Join(data, "cache", "products", "dayz-stable", "1")
 	writeFile(t, filepath.Join(build, "mpmissions", "dayzOffline.fb", "cfgweather.xml"), "weather")
+	writeFile(t, filepath.Join(build, "keys", "dayz.bikey"), "bikey")
 	if err := os.Symlink("1", filepath.Join(data, "cache", "products", "dayz-stable", "current")); err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +90,16 @@ func TestInstanceRender(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(live, "cfgweather.xml")); string(b) != "weather" {
 		t.Errorf("fallback file = %q", b)
+	}
+	// the files the start needs besides the mission
+	if b, _ := os.ReadFile(filepath.Join(root, "runtime", "serverDZ.cfg")); !strings.Contains(string(b), `template = "empty.m";`) || !strings.Contains(string(b), "steamQueryPort = 27016;") {
+		t.Errorf("runtime/serverDZ.cfg = %s", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "runtime", "keys", "dayz.bikey")); string(b) != "bikey" {
+		t.Errorf("runtime/keys/dayz.bikey = %q", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(root, "profiles", "battleye", "beserver_x64.cfg")); !strings.Contains(string(b), "RConPort 2306") {
+		t.Errorf("BattlEye seed = %s", b)
 	}
 
 	// The mission repo moves on; a plain render must not fetch, --update-pristine must.
@@ -123,5 +135,26 @@ func TestInstanceRenderFailures(t *testing.T) {
 	}
 	if _, err := runCmd(t, "instance", "render", "x", "--config", cfg); err == nil {
 		t.Error("unfetchable pristine must fail")
+	}
+}
+
+func TestInstanceRenderNeedsServerCfgBeforeTouchingTheMission(t *testing.T) {
+	cfg, root, _ := renderSetup(t)
+	data := filepath.Dir(cfg)
+	if err := os.Remove(filepath.Join(data, "site", "instances", "x", "serverDZ.cfg")); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"--dry-run"}, {}} {
+		out, err := runCmd(t, append([]string{"instance", "render", "x", "--config", cfg}, args...)...)
+		if err == nil || !strings.Contains(out+err.Error(), "serverDZ.cfg is missing") {
+			t.Errorf("render %v without serverDZ.cfg must fail: %v\n%s", args, err, out)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "mpmissions")); !os.IsNotExist(err) {
+		t.Error("the live mission must not be touched when the start would fail anyway")
+	}
+	writeFile(t, filepath.Join(data, "site", "instances", "x", "serverDZ.cfg"), "not a config")
+	if _, err := runCmd(t, "instance", "render", "x", "--config", cfg); err == nil {
+		t.Error("a serverDZ.cfg that does not parse must fail")
 	}
 }

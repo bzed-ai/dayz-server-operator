@@ -1,0 +1,7 @@
+SCRIPT       : Module: GameLib; loaded 13x files; 13x classes; used 7/2097 kB (0%) of static memory
+SCRIPT       : Module: Game; loaded 422x files; 1426x classes; used 3790/33554 kB (11%) of static memory
+SCRIPT       : Module: World; loaded 2125x files; 5611x classes; used 8497/33554 kB (25%) of static memory
+ SCRIPT       : Module: Mission; loaded 210x files; 447x classes; used 2975/33554 kB (8%) of static memory
+ SCRIPT       : Module: $CurrentDir:mpmissions/dayzOffline.chernarusplus/init.c; loaded 1x files; 1x classes; used 4/1048 kB (0%) of static memory
+ SCRIPT       : [DZOAdmin] loaded, version 0.1.0, protocol 1
+ SCRIPT       : [DZOAdmin] syncing with http://127.0.0.1:37883/

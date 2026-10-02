@@ -1,0 +1,14 @@
+19:14:01 !!! [Inputs] Cannot load input preset "#STR_USER", file does not exist
+19:14:01 ANIMATION (E): Can't load sakhal/Anims/cfg/skeletons.anim.xml
+19:14:01 ANIMATION (E): Failed to open file, line 0, column 0
+19:14:01 ANIMATION (E): Can't load @dzo-admin/Anims/cfg/skeletons.anim.xml
+19:14:01 ANIMATION (E): Failed to open file, line 0, column 0
+19:14:03    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:14:03    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASBroadcasterType'
+19:14:03    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:14:03    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:14:03    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:14:03    ENTITY    (E): Type 'HouseType' must be inherited from class 'PASReceiverType'
+19:14:04    ENTITY    (E): Type 'HouseType' must be inherited from class 'StaticTransmitterType'
+19:14:09  SCRIPT    (E): @"$CurrentDir:mpmissions/dayzOffline.chernarusplus/init.c,99": Can't find variable 'undefined_variable_dzo'
+19:14:09  SCRIPT    (E): Can't compile mission init script'!

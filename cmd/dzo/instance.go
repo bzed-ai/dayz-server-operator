@@ -14,9 +14,12 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/bzed-ai/dayz-server-operator/internal/battleye"
+	"github.com/bzed-ai/dayz-server-operator/internal/config"
 	"github.com/bzed-ai/dayz-server-operator/internal/instance"
 	"github.com/bzed-ai/dayz-server-operator/internal/mission"
 	"github.com/bzed-ai/dayz-server-operator/internal/quadlet"
+	"github.com/bzed-ai/dayz-server-operator/internal/resolve"
+	"github.com/bzed-ai/dayz-server-operator/internal/runfiles"
 	"github.com/bzed-ai/dayz-server-operator/internal/serve"
 )
 
@@ -80,6 +83,12 @@ func newInstanceRenderCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			// Everything that can be wrong with the rest of the start is found
+			// before the live mission is touched (§C5 F3), dry run included.
+			rf, err := prepareRunfiles(cfg, inst)
+			if err != nil {
+				return err
+			}
 			src := inst.Mission.Source
 			if _, err := os.Stat(inst.Paths.Pristine); updatePristine || os.IsNotExist(err) {
 				if err := mission.FetchPristine(cmd.Context(), src.Git, src.Ref, src.Path, inst.Paths.Pristine); err != nil {
@@ -102,6 +111,9 @@ func newInstanceRenderCmd() *cobra.Command {
 				return nil
 			}
 			printReport(cmd, report)
+			if err := runfiles.Write(rf); err != nil {
+				return err
+			}
 			if inst.AdminEnabled() {
 				// Every render rotates the mod's token (§C13).
 				if err := serve.WriteModConfig(cfg, inst); err != nil {
@@ -116,6 +128,37 @@ func newInstanceRenderCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the apply plan and write nothing to the live mission")
 	cmd.Flags().BoolVar(&updatePristine, "update-pristine", false, "fetch the pristine mission again from git before rendering")
 	return cmd
+}
+
+// prepareRunfiles gathers what the keys, serverDZ.cfg and BattlEye config of
+// an instance are rendered from (§C6 steps 2, 6, 7) and checks that the
+// site's serverDZ.cfg parses.
+func prepareRunfiles(cfg *config.Config, inst *resolve.Instance) (runfiles.Input, error) {
+	src, err := os.ReadFile(filepath.Join(cfg.Paths.Site, "instances", inst.Name, "serverDZ.cfg")) //nolint:gosec // the site checkout
+	if err != nil {
+		return runfiles.Input{}, fmt.Errorf("instances/%s/serverDZ.cfg is missing in the site repo: %w", inst.Name, err)
+	}
+	if _, err := runfiles.ServerCfg(src, inst.Map, inst.Ports.Query); err != nil {
+		return runfiles.Input{}, fmt.Errorf("instances/%s/%w", inst.Name, err)
+	}
+	pw, err := runfiles.RConPassword(cfg.Paths.Secrets, inst.Name)
+	if err != nil {
+		return runfiles.Input{}, err
+	}
+	var clientMods []string
+	for _, m := range inst.Mods {
+		if !m.Server && m.Dir != "" {
+			clientMods = append(clientMods, m.Dir)
+		}
+	}
+	keys, err := runfiles.Keys(inst.Product.Dir, clientMods)
+	if err != nil {
+		return runfiles.Input{}, err
+	}
+	return runfiles.Input{
+		RuntimeDir: inst.Paths.Runtime, ProfilesDir: inst.Paths.Profiles, ServerCfg: src, Template: inst.Map,
+		QueryPort: inst.Ports.Query, RConPort: inst.Ports.RCon, RConPass: pw, Keys: keys,
+	}, nil
 }
 
 func lifecycleFlags(cmd *cobra.Command, lc *instance.Lifecycle) {

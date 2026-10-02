@@ -53,31 +53,119 @@ starts a real ``DayZServer`` headless on a render result and checks the logs.
 .. warning::
 
    Only on a development machine or a dedicated test machine. ``dzo test boot``
-   refuses to run on a host where dzo manages instances.
+   refuses to run on a host where dzo manages instances (instance directories
+   below ``paths.instances``, or dzo quadlets for the user), and there is no
+   option to override that.
 
 .. code-block:: sh
 
-   dzo test boot deerisle --server steam --native
-   dzo test boot deerisle --container --keep-tree
-   dzo test boot --vanilla            # refresh the vanilla baseline
+   dzo test boot --vanilla deerisle   # once per server build: record the baseline
+   dzo test boot deerisle             # boot the instance
+   dzo test boot deerisle --expect 'MyMod: loaded' --out ./logs --keep-tree
 
-``--server steam`` uses the "DayZ Server" tool installed by your Steam client
-(Library → Tools). dzo finds it through Steam's library files and never writes
-into Steam's directories. Mods come from your client's workshop folder
-(``--mods-from steam-client``) or from a directory of ``@Mod`` folders.
+``--server steam`` (the default) uses the "DayZ Server" tool installed by your
+Steam client (Library, Tools). dzo finds it through Steam's own manifests, and
+neither installs it nor writes into Steam's directories; ``--server <dir>``
+uses another installation. Mods come from your client's workshop folder
+(``--mods-from steam-client``, the default with ``--server steam``), from dzo's
+cache (``--mods-from cache``), or from a directory of ``@Mod`` folders. dzo-admin
+and other local servermods always come from dzo's cache. Only the native Linux
+server is supported; booting in the runtime container is not built yet.
 
-The test builds a throwaway server tree, starts the server on free ports with a
-random password, waits until it answers Steam queries, stops it, and checks:
+The test builds a throwaway tree (symlinks to the server install, a copy of the
+mission as a render would apply it, your ``serverDZ.cfg`` with test ports, a
+random password and a hostname that starts with ``[dzo boot test]``), starts the
+server on free ports and stops it afterwards. The Steam query answers a couple
+of seconds after the start, long before the mission has loaded, so dzo waits for
+the query, then for the mission's scripts, then for ``--settle`` seconds (20 by
+default), and with dzo-admin for the mod's first contact. ``--timeout`` limits
+the whole wait. The exit code is 0 if everything passed, 1 if a check failed and
+2 if the test itself could not run.
 
-* the server did not crash and became ready in time;
-* no script compile errors (``SCRIPT (E)`` in ``script_*.log``);
-* every mod's scripts were loaded: the number of loaded script files per module
-  must rise over the vanilla baseline (an absolute mod path or a PBO without a
-  prefix silently loads nothing);
-* no known Central Economy or mission errors in the RPT and ``error.log``;
-* expected log lines, and the dzo-admin handshake if the mod is loaded.
+.. list-table::
+   :header-rows: 1
+   :widths: 18 82
 
-Logs are kept in ``--out`` (default ``./boottest-<instance>-<time>/``).
+   * - Check
+     - What fails it
+   * - ``ready``
+     - the server exited or did not answer the Steam query in time
+   * - ``mission``
+     - the query answers but the mission's scripts never load
+   * - ``crash``
+     - a crash dump was written
+   * - ``scripts``
+     - a script compile error (``SCRIPT (E)``, the tag is space-padded), or no
+       script log at all
+   * - ``modules``
+     - a mod ships scripts for a module but its file count did not rise over the
+       vanilla baseline: the scripts were not loaded (an absolute mod path or a
+       PBO without a prefix loads nothing and prints no error)
+   * - ``ce``
+     - an XML file that does not parse, a ``<ce folder>`` or a file that does not
+       exist, a types file that cannot be read
+   * - ``expect``
+     - an ``--expect`` regular expression that is not in the script log or the RPT
+   * - ``dzo-admin``
+     - the mod never made contact at the test endpoint
+
+Everything else that is new against the baseline is shown as a warning, verbatim,
+for example a class name in ``types.xml`` that does not exist
+(``Type 'X' will be ignored``), because Bohemia's own missions have a few of
+those too.
+
+The vanilla baseline holds, per server build, the number of script files each
+module loads and the error lines an unmodded server logs. A server installed
+through Steam logs several hundred of them, because its map data is stripped.
+Without a baseline the counts and error lines are only shown. The baseline is
+cached below ``paths.cache`` and keyed by the server binary, so a game update
+needs a new one.
+
+What a real 1.29 server logs for broken input
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These were captured with a real server (build 24570360) and are the fixtures
+the checks are tested against (``internal/boottest/testdata``).
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Input
+     - Log
+   * - ``types.xml`` that is not well-formed
+     - ``!!! [ERROR][XML] :: load [...types.xml] failed``, ``Error reading end
+       tag. line N``, ``!!! [CE][offlineDB] :: Failed to read types file``
+   * - ``<ce folder>`` that does not exist, or a file that does not
+     - ``!!! [ERROR][XML] :: load [...] failed``, ``Failed to open file``,
+       ``!!! [CE][offlineDB] :: Failed to read types file``
+   * - class that does not exist in ``types.xml``
+     - ``!!! [CE][offlineDB] :: Type 'X' will be ignored. (Type does not exist.
+       (Typo?))``
+   * - script error in the mission's ``init.c``
+     - ``SCRIPT    (E): @"...init.c,99": Can't find variable 'x'`` and
+       ``Can't compile mission init script``; the mission scripts never load
+   * - broken ``cfggameplay.json``
+     - nothing: the file is read only if ``serverDZ.cfg`` has
+       ``enableCfgGameplayFile = 1``, and not checked by this test
+
+The central economy marks its errors with ``!!!``. ``error.log`` also holds
+plain information lines (``ENTITY : Load entity type ...``) that differ from run
+to run; only its ``(E)`` and ``(W)`` lines count.
+
+Logs are kept in ``--out`` (default ``./boottest-<instance>-<time>/``), and the
+whole tree with ``--keep-tree``.
+
+Booting by hand
+~~~~~~~~~~~~~~~
+
+Without dzo, the same procedure: build a tree of symlinks to the Steam server
+install (never write into it), give the server free ports for the game, the
+Steam query (``steamQueryPort`` in ``serverDZ.cfg``) and RCon (``RConPort`` in
+``profiles/battleye/beserver_x64.cfg``), pass mods as paths relative to the tree
+(absolute ones are silently ignored), run it from the tree with ``ulimit -c 0``
+and stop it with ``timeout -k 15``. Then read ``script_*.log``, the ``.RPT`` and
+``error.log`` in ``profiles/``.
 
 Contributing
 ------------
