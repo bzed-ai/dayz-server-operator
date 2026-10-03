@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/steam"
+	"github.com/bzed/dayz-server-operator/internal/steam"
 )
 
 // AppUpdateOptions configures a `+app_update` job.

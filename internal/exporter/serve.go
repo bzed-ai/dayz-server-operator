@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/config"
 )
 
 // certChecks bounds how often the certificate files are looked at.

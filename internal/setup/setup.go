@@ -20,11 +20,11 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/btrfs"
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/instance"
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
-	"github.com/bzed-ai/dayz-server-operator/internal/steam"
+	"github.com/bzed/dayz-server-operator/internal/btrfs"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/instance"
+	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/steam"
 )
 
 // DefaultImagesDir is where the package ships the Containerfiles.

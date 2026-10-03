@@ -23,16 +23,16 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/a2s"
-	"github.com/bzed-ai/dayz-server-operator/internal/backup"
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/instance"
-	"github.com/bzed-ai/dayz-server-operator/internal/mission"
-	"github.com/bzed-ai/dayz-server-operator/internal/monitor"
-	"github.com/bzed-ai/dayz-server-operator/internal/product"
-	"github.com/bzed-ai/dayz-server-operator/internal/resolve"
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
-	"github.com/bzed-ai/dayz-server-operator/internal/steam"
+	"github.com/bzed/dayz-server-operator/internal/a2s"
+	"github.com/bzed/dayz-server-operator/internal/backup"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/instance"
+	"github.com/bzed/dayz-server-operator/internal/mission"
+	"github.com/bzed/dayz-server-operator/internal/monitor"
+	"github.com/bzed/dayz-server-operator/internal/product"
+	"github.com/bzed/dayz-server-operator/internal/resolve"
+	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/steam"
 )
 
 // Runner runs a command and returns its output; tests replace it.

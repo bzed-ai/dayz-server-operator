@@ -10,7 +10,7 @@ import (
 
 	"github.com/beevik/etree"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/ce"
+	"github.com/bzed/dayz-server-operator/internal/ce"
 )
 
 // CopyPristine seeds a staging tree from the instance's pristine mission

@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/health"
+	"github.com/bzed/dayz-server-operator/internal/health"
 )
 
 func newHealthCmd() *cobra.Command {

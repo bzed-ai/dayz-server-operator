@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
 func mustParse(t *testing.T, s string) time.Time {

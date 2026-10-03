@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/battleye"
+	"github.com/bzed/dayz-server-operator/internal/battleye"
 )
 
 // A real battleye.Client's Command method must satisfy Commander (that

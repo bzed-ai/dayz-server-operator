@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/moddeps"
+	"github.com/bzed/dayz-server-operator/internal/moddeps"
 )
 
 // ValidateMod checks a downloaded or imported mod directory before it may

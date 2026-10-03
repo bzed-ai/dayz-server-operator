@@ -10,9 +10,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/api"
-	"github.com/bzed-ai/dayz-server-operator/internal/apiclient"
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/config"
 )
 
 // apiTarget are the flags every API-backed command shares: which

@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/admin"
+	"github.com/bzed/dayz-server-operator/internal/admin"
 )
 
 // Network selects how an instance's ports reach the host (D6), mirroring

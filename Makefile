@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Bernd Zeimetz <bernd@bzed.de>
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-MODULE      := github.com/bzed-ai/dayz-server-operator
+MODULE      := github.com/bzed/dayz-server-operator
 BINARY      := dzo
 CMD         := ./cmd/dzo
 BIN_DIR     := bin

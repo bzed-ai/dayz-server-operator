@@ -4,7 +4,7 @@
 // Package version holds build-time version information stamped via -ldflags.
 package version
 
-// Set via -ldflags "-X github.com/bzed-ai/dayz-server-operator/internal/version.Version=..." at build time.
+// Set via -ldflags "-X github.com/bzed/dayz-server-operator/internal/version.Version=..." at build time.
 var (
 	Version = "dev"
 	Commit  = "unknown"

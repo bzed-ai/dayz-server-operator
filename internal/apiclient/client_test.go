@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/admin"
-	"github.com/bzed-ai/dayz-server-operator/internal/api"
-	"github.com/bzed-ai/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/admin"
+	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/apiclient"
 )
 
 func setup(t *testing.T) (*apiclient.Client, *admin.Hub, *api.Server) {

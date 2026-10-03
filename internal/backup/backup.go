@@ -20,7 +20,7 @@ import (
 
 	"golang.org/x/sys/unix"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/btrfs"
+	"github.com/bzed/dayz-server-operator/internal/btrfs"
 )
 
 // FS is what the manager needs from the filesystem; Btrfs is the real one.

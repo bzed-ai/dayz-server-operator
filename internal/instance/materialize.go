@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/quadlet"
+	"github.com/bzed/dayz-server-operator/internal/quadlet"
 )
 
 // WriteContainerUnit renders spec (internal/quadlet) and writes it

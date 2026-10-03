@@ -14,9 +14,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/cache"
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/steam"
+	"github.com/bzed/dayz-server-operator/internal/cache"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/steam"
 )
 
 // Installer turns steamcmd downloads and local mod sources into immutable

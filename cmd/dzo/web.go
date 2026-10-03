@@ -18,10 +18,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/apiclient"
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/version"
-	"github.com/bzed-ai/dayz-server-operator/internal/web"
+	"github.com/bzed/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/version"
+	"github.com/bzed/dayz-server-operator/internal/web"
 )
 
 // webBackends turns web.backends into clients. Without any, the web

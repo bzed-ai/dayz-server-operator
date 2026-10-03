@@ -24,13 +24,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/a2s"
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/instance"
-	"github.com/bzed-ai/dayz-server-operator/internal/mission"
-	"github.com/bzed-ai/dayz-server-operator/internal/monitor"
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
-	"github.com/bzed-ai/dayz-server-operator/internal/steam"
+	"github.com/bzed/dayz-server-operator/internal/a2s"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/instance"
+	"github.com/bzed/dayz-server-operator/internal/mission"
+	"github.com/bzed/dayz-server-operator/internal/monitor"
+	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/steam"
 )
 
 func write(t *testing.T, path, body string) {

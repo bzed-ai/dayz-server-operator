@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/moddeps"
-	"github.com/bzed-ai/dayz-server-operator/internal/product"
+	"github.com/bzed/dayz-server-operator/internal/moddeps"
+	"github.com/bzed/dayz-server-operator/internal/product"
 )
 
 func write(t *testing.T, path, body string) {

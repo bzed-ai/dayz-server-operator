@@ -23,7 +23,7 @@ import (
 
 	"github.com/woozymasta/pbo"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/admin"
+	"github.com/bzed/dayz-server-operator/internal/admin"
 )
 
 // The tests boot a fake DayZServer: this test binary, started through a shell

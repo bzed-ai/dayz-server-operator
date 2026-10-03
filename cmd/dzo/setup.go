@@ -6,8 +6,8 @@ package main
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/setup"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/setup"
 )
 
 func newSetupCmd() *cobra.Command {

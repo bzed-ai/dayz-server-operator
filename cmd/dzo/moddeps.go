@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/moddeps"
+	"github.com/bzed/dayz-server-operator/internal/moddeps"
 )
 
 // loadPatches reads path as a config.cpp source or a rapified config.bin,

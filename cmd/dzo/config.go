@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/resolve"
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/resolve"
+	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
 // validateSite resolves every instance of the site checkout, if there is

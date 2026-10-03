@@ -14,11 +14,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/product"
-	"github.com/bzed-ai/dayz-server-operator/internal/resolve"
-	"github.com/bzed-ai/dayz-server-operator/internal/servermods"
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/product"
+	"github.com/bzed/dayz-server-operator/internal/resolve"
+	"github.com/bzed/dayz-server-operator/internal/servermods"
+	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
 // steamDetails looks up workshop file details; tests replace it.

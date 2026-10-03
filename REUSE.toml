@@ -1,7 +1,7 @@
 version = 1
 SPDX-PackageName = "dayz-server-operator"
 SPDX-PackageSupplier = "Bernd Zeimetz <bernd@bzed.de>"
-SPDX-PackageDownloadLocation = "https://github.com/bzed-ai/dayz-server-operator"
+SPDX-PackageDownloadLocation = "https://github.com/bzed/dayz-server-operator"
 
 # .gitmodules is git configuration; go.sum is a machine-generated, strictly-formatted checksum lockfile: it
 # cannot carry a comment header without breaking `go mod verify`.

@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/backup"
-	"github.com/bzed-ai/dayz-server-operator/internal/instance"
+	"github.com/bzed/dayz-server-operator/internal/backup"
+	"github.com/bzed/dayz-server-operator/internal/instance"
 )
 
 // backupFor resolves an instance and checks that it can be backed up.

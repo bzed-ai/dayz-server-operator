@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/servercfg"
+	"github.com/bzed/dayz-server-operator/internal/servercfg"
 )
 
 func newServerCfgCmd() *cobra.Command {

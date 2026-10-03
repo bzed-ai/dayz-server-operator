@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/admin"
+	"github.com/bzed/dayz-server-operator/internal/admin"
 )
 
 // APIVersion is the version of the /api/v1 contract (additive changes keep

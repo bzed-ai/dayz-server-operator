@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/quadlet"
+	"github.com/bzed/dayz-server-operator/internal/quadlet"
 )
 
 func TestWriteContainerUnit(t *testing.T) {

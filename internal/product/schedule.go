@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
 // Decision is the update engine's answer to "should the pending mod

@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/version"
+	"github.com/bzed/dayz-server-operator/internal/version"
 )
 
 // defaultConfigPath is where the Debian package installs config.yaml (§C2).

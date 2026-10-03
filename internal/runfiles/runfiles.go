@@ -17,7 +17,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/servercfg"
+	"github.com/bzed/dayz-server-operator/internal/servercfg"
 )
 
 // Keys returns the .bikey files a start needs: those of the server build and

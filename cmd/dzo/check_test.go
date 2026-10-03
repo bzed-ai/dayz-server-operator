@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/monitor"
+	"github.com/bzed/dayz-server-operator/internal/monitor"
 )
 
 func TestCheckRemoteInstanceOK(t *testing.T) {

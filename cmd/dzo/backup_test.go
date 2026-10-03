@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/btrfs"
+	"github.com/bzed/dayz-server-operator/internal/btrfs"
 )
 
 // btrfsData returns a data directory on btrfs (DZO_BTRFS_TESTDIR, or the

@@ -12,9 +12,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/quadlet"
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/quadlet"
+	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")

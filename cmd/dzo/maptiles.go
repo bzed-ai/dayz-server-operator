@@ -11,10 +11,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/api"
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/maptiles"
-	"github.com/bzed-ai/dayz-server-operator/internal/serve"
+	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/maptiles"
+	"github.com/bzed/dayz-server-operator/internal/serve"
 )
 
 func newMapCmd() *cobra.Command {

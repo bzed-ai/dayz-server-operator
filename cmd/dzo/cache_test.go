@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/cache"
+	"github.com/bzed/dayz-server-operator/internal/cache"
 )
 
 func TestCacheListAndGC(t *testing.T) {

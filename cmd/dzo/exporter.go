@@ -14,11 +14,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/exporter"
-	"github.com/bzed-ai/dayz-server-operator/internal/monitor"
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
-	"github.com/bzed-ai/dayz-server-operator/internal/version"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/exporter"
+	"github.com/bzed/dayz-server-operator/internal/monitor"
+	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/version"
 )
 
 func newCollector(cfg *config.Config) *exporter.Collector {

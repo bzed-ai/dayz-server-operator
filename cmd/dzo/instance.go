@@ -13,15 +13,15 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/backup"
-	"github.com/bzed-ai/dayz-server-operator/internal/battleye"
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/instance"
-	"github.com/bzed-ai/dayz-server-operator/internal/mission"
-	"github.com/bzed-ai/dayz-server-operator/internal/quadlet"
-	"github.com/bzed-ai/dayz-server-operator/internal/resolve"
-	"github.com/bzed-ai/dayz-server-operator/internal/runfiles"
-	"github.com/bzed-ai/dayz-server-operator/internal/serve"
+	"github.com/bzed/dayz-server-operator/internal/backup"
+	"github.com/bzed/dayz-server-operator/internal/battleye"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/instance"
+	"github.com/bzed/dayz-server-operator/internal/mission"
+	"github.com/bzed/dayz-server-operator/internal/quadlet"
+	"github.com/bzed/dayz-server-operator/internal/resolve"
+	"github.com/bzed/dayz-server-operator/internal/runfiles"
+	"github.com/bzed/dayz-server-operator/internal/serve"
 )
 
 // newInstanceCmd wires the lifecycle operations internal/instance

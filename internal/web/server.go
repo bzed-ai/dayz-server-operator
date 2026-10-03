@@ -24,7 +24,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/apiclient"
+	"github.com/bzed/dayz-server-operator/internal/apiclient"
 )
 
 //go:embed templates/*.html

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/product"
-	"github.com/bzed-ai/dayz-server-operator/internal/servermods"
+	"github.com/bzed/dayz-server-operator/internal/product"
+	"github.com/bzed/dayz-server-operator/internal/servermods"
 )
 
 // buildPBO is a minimal PBO with a prefix header and one file.

@@ -13,11 +13,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/api"
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/serve"
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
-	"github.com/bzed-ai/dayz-server-operator/internal/version"
+	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/serve"
+	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/version"
 )
 
 func newServeCmd() *cobra.Command {

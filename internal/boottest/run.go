@@ -25,9 +25,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/a2s"
-	"github.com/bzed-ai/dayz-server-operator/internal/admin"
-	"github.com/bzed-ai/dayz-server-operator/internal/runfiles"
+	"github.com/bzed/dayz-server-operator/internal/a2s"
+	"github.com/bzed/dayz-server-operator/internal/admin"
+	"github.com/bzed/dayz-server-operator/internal/runfiles"
 )
 
 // Mod is one mod of the test: its directory name in the tree (@Name) and where

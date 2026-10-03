@@ -22,14 +22,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/instance"
-	"github.com/bzed-ai/dayz-server-operator/internal/notify"
-	"github.com/bzed-ai/dayz-server-operator/internal/product"
-	"github.com/bzed-ai/dayz-server-operator/internal/resolve"
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
-	"github.com/bzed-ai/dayz-server-operator/internal/steam"
-	"github.com/bzed-ai/dayz-server-operator/internal/units"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/instance"
+	"github.com/bzed/dayz-server-operator/internal/notify"
+	"github.com/bzed/dayz-server-operator/internal/product"
+	"github.com/bzed/dayz-server-operator/internal/resolve"
+	"github.com/bzed/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/steam"
+	"github.com/bzed/dayz-server-operator/internal/units"
 )
 
 const (

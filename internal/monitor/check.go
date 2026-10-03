@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/a2s"
+	"github.com/bzed/dayz-server-operator/internal/a2s"
 )
 
 // Status is a Monitoring Plugins API (Nagios) check status.

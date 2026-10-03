@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/ce"
+	"github.com/bzed/dayz-server-operator/internal/ce"
 )
 
 func TestCopyPristineCopiesTreeAndDirs(t *testing.T) {

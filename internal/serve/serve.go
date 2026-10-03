@@ -15,11 +15,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/admin"
-	"github.com/bzed-ai/dayz-server-operator/internal/api"
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/resolve"
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/admin"
+	"github.com/bzed/dayz-server-operator/internal/api"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/resolve"
+	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
 // gatewayHost is how a container with published (pasta) networking reaches

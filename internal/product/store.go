@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/cache"
+	"github.com/bzed/dayz-server-operator/internal/cache"
 )
 
 // ProductStore returns the internal/cache.Store that holds one product's

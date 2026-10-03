@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: dayz-server-operator
 Upstream-Contact: Bernd Zeimetz <bernd@bzed.de>
-Source: https://github.com/bzed-ai/dayz-server-operator
+Source: https://github.com/bzed/dayz-server-operator
 
 Files: *
 Copyright: 2026 Bernd Zeimetz <bernd@bzed.de>

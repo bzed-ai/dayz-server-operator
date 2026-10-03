@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/monitor"
+	"github.com/bzed/dayz-server-operator/internal/monitor"
 )
 
 func newCheckCmd() *cobra.Command {

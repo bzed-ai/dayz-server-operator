@@ -10,11 +10,11 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/btrfs"
-	"github.com/bzed-ai/dayz-server-operator/internal/config"
-	"github.com/bzed-ai/dayz-server-operator/internal/hooks"
-	"github.com/bzed-ai/dayz-server-operator/internal/resolve"
-	"github.com/bzed-ai/dayz-server-operator/internal/site"
+	"github.com/bzed/dayz-server-operator/internal/btrfs"
+	"github.com/bzed/dayz-server-operator/internal/config"
+	"github.com/bzed/dayz-server-operator/internal/hooks"
+	"github.com/bzed/dayz-server-operator/internal/resolve"
+	"github.com/bzed/dayz-server-operator/internal/site"
 )
 
 // PolicyOf converts the site config to a retention policy.

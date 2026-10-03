@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/a2s"
-	"github.com/bzed-ai/dayz-server-operator/internal/battleye"
+	"github.com/bzed/dayz-server-operator/internal/a2s"
+	"github.com/bzed/dayz-server-operator/internal/battleye"
 )
 
 // RConProbe optionally adds a BattlEye "version" round trip to a liveness

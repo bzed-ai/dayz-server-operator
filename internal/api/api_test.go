@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/admin"
+	"github.com/bzed/dayz-server-operator/internal/admin"
 )
 
 type env struct {

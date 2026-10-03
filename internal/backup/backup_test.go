@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/btrfs"
+	"github.com/bzed/dayz-server-operator/internal/btrfs"
 )
 
 // fakeFS copies directories where btrfs would snapshot them.

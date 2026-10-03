@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/servermods"
-	"github.com/bzed-ai/dayz-server-operator/internal/version"
+	"github.com/bzed/dayz-server-operator/internal/servermods"
+	"github.com/bzed/dayz-server-operator/internal/version"
 )
 
 // newServermodsCmd is the build-time tool behind `make servermods`.

@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/battleye"
+	"github.com/bzed/dayz-server-operator/internal/battleye"
 )
 
 func newRconCmd() *cobra.Command {

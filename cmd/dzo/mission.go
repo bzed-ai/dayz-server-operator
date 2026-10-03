@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/bzed-ai/dayz-server-operator/internal/mission"
+	"github.com/bzed/dayz-server-operator/internal/mission"
 )
 
 func newMissionCmd() *cobra.Command {
